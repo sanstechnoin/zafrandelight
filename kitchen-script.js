@@ -47,9 +47,11 @@ const loginOverlay = document.getElementById('kitchen-login-overlay');
 const loginButton = document.getElementById('login-button');
 const passwordInput = document.getElementById('kitchen-password');
 const loginError = document.getElementById('login-error');
-const kdsContentWrapper = document.getElementById('kds-content-wrapper');
-const dineInGrid = document.getElementById('dine-in-grid');
-const pickupGrid = document.getElementById('pickup-grid');
+
+// Columns
+const colDineIn = document.getElementById('list-dinein');
+const colPickup = document.getElementById('list-pickup');
+const colDelivery = document.getElementById('list-delivery');
 
 // Popups & Controls
 const newOrderPopup = document.getElementById('new-order-popup-overlay');
@@ -66,10 +68,7 @@ let currentWaiterCallId = null;
 // Audio
 const alertAudio = document.getElementById('alertSound');
 const KITCHEN_PASSWORD = "zafran"; 
-const TOTAL_DINE_IN_TABLES = 12;
 let allOrders = {};
-
-// --- NEW QUEUE VARIABLES ---
 let newOrderQueue = []; 
 
 // --- 4. LOGIN LOGIC ---
@@ -77,7 +76,6 @@ document.addEventListener("DOMContentLoaded", () => {
     loginButton.addEventListener('click', () => {
         if (passwordInput.value === KITCHEN_PASSWORD) {
             loginOverlay.classList.add('hidden');
-            kdsContentWrapper.style.opacity = '1';
             
             // Unlock Audio
             alertAudio.play().then(() => {
@@ -95,13 +93,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- 5. INITIALIZE KDS ---
 function initializeKDS() {
-    createDineInTables();
-
-    // Listen for Clear Buttons (Single Table)
-    dineInGrid.querySelectorAll('.clear-table-btn').forEach(btn => {
-        btn.addEventListener('click', () => handleClearOrder(btn.dataset.tableId, 'dine-in', btn));
-    });
-
     // Listen for MASTER CLEAR Button
     if(masterClearBtn) {
         masterClearBtn.addEventListener('click', handleMasterClear);
@@ -111,11 +102,12 @@ function initializeKDS() {
     db.collection("orders")
       .where("status", "in", ["new", "seen", "ready", "cooked"]) 
       .onSnapshot((snapshot) => {
-            if(connectionIconEl) connectionIconEl.textContent = '✅'; 
+            if(connectionIconEl) connectionIconEl.textContent = 'System Online'; 
             
-            dineInGrid.innerHTML = ''; // Re-render
-            createDineInTables(); 
-            pickupGrid.innerHTML = '';
+            // Clear Columns
+            colDineIn.innerHTML = '';
+            colPickup.innerHTML = '';
+            colDelivery.innerHTML = '';
 
             snapshot.docChanges().forEach((change) => {
                 const orderData = change.doc.data();
@@ -129,67 +121,100 @@ function initializeKDS() {
 
                 // New Order -> Add to Queue
                 if (change.type === "added" && orderData.status === "new") {
-                    // Check if already in queue to prevent dupes
                     if (!newOrderQueue.find(o => o.id === orderData.id)) {
                         newOrderQueue.push(orderData);
-                        // Sort by Time (Oldest First)
                         newOrderQueue.sort((a, b) => a.createdAt - b.createdAt);
                         processNewOrderQueue(); 
                     }
                 }
             });
 
-            // Process all docs for display
+            // Populate active orders
             const allDocs = [];
             snapshot.forEach(doc => allDocs.push({id: doc.id, ...doc.data()}));
-            
-            // Sort by Time
             allDocs.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
 
-            // Populate global state
             allOrders = {};
-            allDocs.forEach(d => allOrders[d.id] = d);
-
-            // Render Grids
-            const tablesWithOrders = new Set();
             allDocs.forEach(order => {
                 if(order.orderType === 'assistance') return;
-                
-                if (order.orderType === 'pickup' || order.orderType === 'delivery') {
-                    // handled by renderOnlineGrid
-                } else {
-                    tablesWithOrders.add(order.table);
-                }
+                allOrders[order.id] = order;
+                createOrderCard(order);
             });
-
-            renderOnlineGrid();
-            tablesWithOrders.forEach(t => renderDineInTable(t));
 
       }, (error) => {
           console.error("Firebase Error:", error);
-          if(connectionIconEl) connectionIconEl.textContent = '❌'; 
+          if(connectionIconEl) connectionIconEl.textContent = 'Offline'; 
       });
 }
 
-function createDineInTables() {
-    dineInGrid.innerHTML = '';
-    for (let i = 1; i <= TOTAL_DINE_IN_TABLES; i++) {
-        const tableBox = document.createElement('div');
-        tableBox.className = 'table-box';
-        tableBox.id = `table-${i}`; 
-        tableBox.innerHTML = `
-            <div class="table-header"><h2>Table ${i}</h2></div>
-            <ul class="order-list"></ul>
-            <p class="order-list-empty">Waiting for order...</p>
-            <button class="clear-table-btn" data-table-id="${i}">Clear Table ${i}</button>
-        `;
-        dineInGrid.appendChild(tableBox);
+function createOrderCard(order) {
+    const time = order.createdAt?.toDate().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) || '--:--';
+    const isReady = order.status === 'ready' || order.status === 'cooked';
+    
+    // Determine Target Column & Styles
+    let targetCol = colDineIn;
+    let badgeColor = "var(--gold)";
+    let title = `Table ${order.table}`;
+    let subInfo = "";
+
+    if (order.orderType === 'pickup') {
+        targetCol = colPickup;
+        badgeColor = "#3498db";
+        title = order.customerName || "Customer";
+        subInfo = order.timeSlot ? `Target: ${order.timeSlot}` : "";
+    } 
+    else if (order.orderType === 'delivery') {
+        targetCol = colDelivery;
+        badgeColor = "#e67e22";
+        title = order.customerName || "Customer";
+        subInfo = order.deliveryAddress ? `📍 ${order.deliveryAddress.street}` : "";
     }
+
+    // Build Item List
+    let itemsHtml = "";
+    if(order.items && Array.isArray(order.items)) {
+        itemsHtml = order.items.map(item => `
+            <div class="kitchen-item">
+                <span>
+                    <span class="item-qty">${item.quantity}x</span>
+                    ${item.name} <strong>${getDishNumber(item.name)}</strong>
+                </span>
+            </div>
+        `).join('');
+    }
+
+    // Styles for Card
+    const borderColor = isReady ? '#444' : badgeColor;
+    const opacity = isReady ? '0.6' : '1';
+    const btnText = isReady ? "Undo / Active" : "MARK READY";
+    const btnClass = isReady ? "btn-done" : "btn-ready";
+
+    // Card HTML
+    const cardHtml = `
+        <div class="order-card" style="border-top: 3px solid ${borderColor}; opacity: ${opacity};">
+            <div class="card-header">
+                <span class="card-title">${title}</span>
+                <span class="card-time">${time}</span>
+            </div>
+            <div class="card-body">
+                ${subInfo ? `<div style="color:${badgeColor}; font-weight:bold; margin-bottom:10px;">${subInfo}</div>` : ''}
+                ${itemsHtml}
+                ${order.notes ? `<div class="card-note">📝 "${order.notes}"</div>` : ''}
+            </div>
+            <div class="card-footer">
+                <button class="btn-action ${btnClass}" onclick="handleServe('${order.id}')">
+                    ${isReady ? '✅ READY' : 'MARK READY'}
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Append to correct column
+    targetCol.insertAdjacentHTML('beforeend', cardHtml);
 }
 
 // --- QUEUE & POPUP LOGIC ---
 function processNewOrderQueue() {
-    // If queue is empty, stop everything
     if (newOrderQueue.length === 0) {
         newOrderPopup.classList.add('hidden');
         alertAudio.loop = false;
@@ -198,136 +223,35 @@ function processNewOrderQueue() {
         return;
     }
 
-    // Get the first order (Oldest)
     const currentOrder = newOrderQueue[0];
-    
-    // Play Sound Loop
     alertAudio.loop = true;
     alertAudio.play().catch(e => console.log(e));
 
-    // Render Popup
     let title = "";
     if (currentOrder.orderType === 'pickup') title = `🛍️ Pickup: ${currentOrder.customerName}`;
     else if (currentOrder.orderType === 'delivery') title = `🚚 Delivery: ${currentOrder.customerName}`;
     else title = `🍽️ Table ${currentOrder.table}`;
 
     let itemsHtml = currentOrder.items.map(item => 
-        `<li>${item.quantity}x ${item.name} <strong style="color:var(--gold);">${getDishNumber(item.name)}</strong></li>`
+        `<div style="font-size:1.8rem; margin:5px 0;">${item.quantity}x ${item.name}</div>`
     ).join('');
 
-    // --- THE VISIBILITY FIX ---
-    // Black Text + Gold Background = High Visibility
-    const pendingText = `
-        <div style="font-size: 1.5rem; color: black; background: #D4AF37; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-weight: bold; border: 2px solid white;">
-            PENDING ORDERS: ${newOrderQueue.length}
-        </div>`;
-
     popupOrderDetails.innerHTML = `
-        ${pendingText}
-        <h2>${title}</h2>
-        <ul>${itemsHtml}</ul>
-        ${currentOrder.notes ? `<p style="color:#ff8888;">⚠️ ${currentOrder.notes}</p>` : ''}
+        <h2 style="color:var(--gold); margin:10px 0;">${title}</h2>
+        <div style="text-align:left; display:inline-block;">${itemsHtml}</div>
+        ${currentOrder.notes ? `<p style="color:#ff8888; font-size:1.2rem;">⚠️ ${currentOrder.notes}</p>` : ''}
     `;
     
     newOrderPopup.classList.remove('hidden');
 }
 
-// Accept Button Click Handler
 acceptOrderBtn.onclick = () => {
     if (newOrderQueue.length > 0) {
-        const orderToAccept = newOrderQueue.shift(); // Remove first from queue
-        
-        // Mark as 'seen' in DB so it doesn't pop up again
+        const orderToAccept = newOrderQueue.shift(); 
         db.collection("orders").doc(orderToAccept.id).update({ status: "seen" });
-        
-        // Process next one immediately
         processNewOrderQueue();
     }
 };
-
-// --- RENDER DINE-IN ---
-function renderDineInTable(tableId) {
-    const tableBox = document.getElementById(`table-${tableId}`);
-    if (!tableBox) return;
-    const orderList = tableBox.querySelector('.order-list');
-    const emptyMsg = tableBox.querySelector('.order-list-empty');
-    const clearBtn = tableBox.querySelector('.clear-table-btn'); 
-
-    const ordersForThisTable = Object.values(allOrders).filter(o => o.table == tableId && o.orderType !== 'pickup' && o.orderType !== 'delivery');
-    orderList.innerHTML = ""; 
-
-    if (ordersForThisTable.length === 0) {
-        orderList.style.display = 'none';
-        emptyMsg.style.display = 'block';
-        clearBtn.disabled = true; 
-        clearBtn.style.backgroundColor = "#555"; 
-    } else {
-        orderList.style.display = 'block';
-        emptyMsg.style.display = 'none';
-        clearBtn.disabled = false;
-        clearBtn.style.backgroundColor = "#8B0000"; 
-
-        ordersForThisTable.sort((a, b) => a.createdAt.seconds - b.createdAt.seconds);
-
-        ordersForThisTable.forEach(order => {
-            const time = order.createdAt.toDate().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-            
-            let itemsHtml = order.items.map(item => 
-                `<li>${item.quantity}x ${item.name} <strong style="color:var(--gold);">${getDishNumber(item.name)}</strong></li>`
-            ).join('');
-            
-            const isCooked = order.status === 'cooked' || order.status === 'ready';
-            const dimStyle = isCooked ? 'opacity:0.5;' : '';
-            const badge = isCooked ? '<span style="float:right;">✅</span>' : '';
-
-            orderList.innerHTML += `
-                <div class="order-group" style="${dimStyle} border-top:1px solid #444; padding-top:10px;">
-                    <h4>Order @ ${time} ${badge}</h4>
-                    <ul>${itemsHtml}</ul>
-                    ${order.notes ? `<p class="order-notes">⚠️ ${order.notes}</p>` : ''}
-                    <button class="btn-serve" onclick="handleServe('${order.id}')">${isCooked ? 'Undo' : 'Mark Ready'}</button>
-                </div>
-            `;
-        });
-    }
-}
-
-// --- RENDER ONLINE ---
-function renderOnlineGrid() {
-    pickupGrid.innerHTML = '';
-    const onlineOrders = Object.values(allOrders).filter(o => o.orderType === 'pickup' || o.orderType === 'delivery');
-    onlineOrders.sort((a, b) => a.createdAt.seconds - b.createdAt.seconds);
-
-    if (onlineOrders.length === 0) {
-        pickupGrid.innerHTML = `<div class="pickup-box-empty"><p>Waiting for online orders...</p></div>`;
-        return;
-    }
-
-    onlineOrders.forEach(order => {
-        const time = order.createdAt.toDate().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        const isReady = order.status === 'ready' || order.status === 'cooked';
-        
-        let typeBadge = order.orderType === 'delivery' ? "🚚 DELIVERY" : "🛍️ PICKUP";
-        let typeColor = order.orderType === 'delivery' ? "#e67e22" : "#3498db"; 
-
-        let itemsHtml = order.items.map(item => 
-            `<li>${item.quantity}x ${item.name} <strong style="color:var(--gold);">${getDishNumber(item.name)}</strong></li>`
-        ).join('');
-
-        pickupGrid.innerHTML += `
-            <div class="pickup-box" style="border-top: 3px solid ${typeColor}; ${isReady ? 'opacity:0.6;' : ''}">
-                <div class="table-header">
-                    <h2>${order.customerName}</h2> 
-                    <span class="order-time">@ ${time}</span>
-                </div>
-                <div style="margin-bottom:8px;"><span style="background:${typeColor}; padding:2px 6px; border-radius:4px;">${typeBadge}</span></div>
-                <div style="font-weight:bold; color:#D4AF37;">Target: ${order.timeSlot}</div>
-                <ul>${itemsHtml}</ul>
-                ${order.notes ? `<div style="color:#ff8888;">📝 "${order.notes}"</div>` : ''}
-                <button class="clear-pickup-btn" onclick="handleServe('${order.id}')">${isReady ? 'Undo' : 'Mark Ready'}</button>
-            </div>`;
-    });
-}
 
 // --- ACTIONS ---
 window.handleServe = function(orderId) {
@@ -337,57 +261,31 @@ window.handleServe = function(orderId) {
     db.collection("orders").doc(orderId).update({ status: newStatus });
 }
 
-window.handleClearOrder = function(tableId) {
-    if(!confirm(`Clear all orders for Table ${tableId}?`)) return;
-    
-    const tableOrders = Object.values(allOrders).filter(o => o.table == tableId && o.orderType !== 'pickup' && o.orderType !== 'delivery');
-    const batch = db.batch();
-    
-    tableOrders.forEach(order => {
-        // Archive
-        const archiveRef = db.collection("archived_orders").doc(`archive-${order.id}`);
-        batch.set(archiveRef, { ...order, closedAt: firebase.firestore.FieldValue.serverTimestamp() });
-        // Delete
-        const docRef = db.collection("orders").doc(order.id);
-        batch.delete(docRef);
-    });
-    batch.commit();
-}
-
 // --- MASTER CLEAR FUNCTION ---
 async function handleMasterClear() {
-    if(!confirm("⚠️ WARNING: This will DELETE ALL active orders from the screen.\n\nUse this to 'Reset the Day' or clear stuck orders.\n\nAre you sure?")) {
+    if(!confirm("⚠️ WARNING: DELETE ALL ORDERS?\n\nThis will clear the screen for a new day.")) {
         return;
     }
 
-    const pwd = prompt("Please enter Kitchen Password to confirm deletion:");
+    const pwd = prompt("Confirm Password:");
     if (pwd !== KITCHEN_PASSWORD) {
-        alert("Wrong password. Action cancelled.");
+        alert("Wrong password.");
         return;
     }
 
     try {
         const snapshot = await db.collection("orders").get();
-        if (snapshot.empty) {
-            alert("Board is already empty.");
-            return;
-        }
-
         const batch = db.batch();
-        snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
         await batch.commit();
-        alert("✅ Board Cleared! Ready for new day.");
+        alert("✅ Board Cleared!");
         location.reload(); 
-
     } catch (error) {
         console.error("Error clearing board:", error);
-        alert("Error clearing board. Check console.");
     }
 }
 
+// Waiter Call Logic
 function showWaiterCall(tableNum, docId) {
     currentWaiterCallId = docId;
     waiterCallTableText.innerText = `TABLE ${tableNum}`;
