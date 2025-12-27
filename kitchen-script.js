@@ -43,6 +43,7 @@ const db = firebase.firestore();
 
 // --- 3. DOM ELEMENTS ---
 const connectionIconEl = document.getElementById('connection-icon');
+const statusDot = document.getElementById('status-dot'); // --- FIXED: ADDED SELECTOR ---
 const loginOverlay = document.getElementById('kitchen-login-overlay');
 const loginButton = document.getElementById('login-button');
 const passwordInput = document.getElementById('kitchen-password');
@@ -102,8 +103,10 @@ function initializeKDS() {
     db.collection("orders")
       .where("status", "in", ["new", "seen", "ready", "cooked"]) 
       .onSnapshot((snapshot) => {
+            // --- FIXED: UPDATE STATUS DOT COLOR ---
             if(connectionIconEl) connectionIconEl.textContent = 'System Online'; 
-            
+            if(statusDot) statusDot.classList.add('online');
+
             // Clear Columns
             colDineIn.innerHTML = '';
             colPickup.innerHTML = '';
@@ -144,6 +147,7 @@ function initializeKDS() {
       }, (error) => {
           console.error("Firebase Error:", error);
           if(connectionIconEl) connectionIconEl.textContent = 'Offline'; 
+          if(statusDot) statusDot.classList.remove('online');
       });
 }
 
