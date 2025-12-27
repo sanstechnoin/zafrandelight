@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kitchen Display System | Zaffran</title>
     <link rel="icon" type="image/png" href="favlogo.png">
-    <link rel="stylesheet" href="style.css?v=46">
+    <link rel="stylesheet" href="style.css?v=47">
     <style>
         /* --- ENTERPRISE THEME (SAP STYLE) --- */
         :root {
@@ -91,11 +91,11 @@
         
         .card-body { padding: 15px; }
         
-        /* --- FIXED: Item Visibility --- */
+        /* ITEM VISIBILITY */
         .kitchen-item {
             font-size: 1.1rem; margin-bottom: 8px; padding-bottom: 5px;
             border-bottom: 1px dashed #333; display: flex; justify-content: space-between;
-            color: #ffffff !important; /* Force White Color */
+            color: #ffffff !important; 
         }
         .kitchen-item strong { color: #ffffff !important; margin-left: 5px; }
         .item-qty { color: var(--gold) !important; font-weight: bold; margin-right: 10px; }
@@ -132,7 +132,7 @@
             padding: 8px 0; font-size: 0.8rem; color: #888;
             display: flex; justify-content: center; z-index: 100;
         }
-        .footer-inner { display: flex; justify-content: space-between; width: 100%; max-width: var(--content-width); padding: 0 20px; }
+        .footer-inner { display: flex; justify-content: space-between; width: 100%; max-width: var(--content-width); padding: 0 20px; align-items: center; }
 
         /* POPUPS */
         #new-order-popup-overlay .kitchen-popup-box {
@@ -190,8 +190,11 @@
 
     <footer class="site-credit-footer" id="footer-bar">
         <div class="footer-inner">
-            <span class="footer-copyright">&copy; 2025 Zaffran Delight</span>
-            <span class="footer-developer">System v2.0 - KDS</span>
+            <span class="footer-copyright">&copy; 2025 Zaffran Delight | System v2.0</span>
+            <span class="footer-developer">
+                Developed by <a href="https://sanstechno.in/" target="_blank" rel="noopener" style="color:var(--gold); text-decoration:none; font-weight:bold;">Shri Avinash Narendhran S V</a> 
+                <span style="margin-left:10px; border-left:1px solid #555; padding-left:10px; color:#aaa;">📞 +49 162 3757839</span>
+            </span>
         </div>
     </footer>
 
