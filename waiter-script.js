@@ -389,38 +389,32 @@ document.addEventListener("DOMContentLoaded", () => {
         ordersToArchive = [];
     }
 
+    // --- UPDATED: SEND TO BILLING LOGIC ---
     window.finalizePayment = async function() {
         if(ordersToArchive.length === 0) return;
         const btn = document.querySelector('#payment-modal .btn-submit-order');
-        let originalText = "✅ Paid & Close";
+        let originalText = "📨 Send to Bill";
         if(btn) {
              originalText = btn.innerText;
              btn.disabled = true;
-             btn.innerText = "Processing...";
+             btn.innerText = "Sending...";
         }
 
         try {
             const batch = db.batch();
             for (const order of ordersToArchive) {
-                // Save to 'archived_orders' (for Records Page)
-                const archiveRef = db.collection("archived_orders").doc(`archive-${order.id}`);
-                batch.set(archiveRef, {
-                    ...order,
-                    status: 'paid', // Mark as paid
-                    paidAmount: parseFloat(document.getElementById('payment-total-display').innerText.replace(' €','')), // Capture total
-                    closedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    day: new Date().toISOString().split('T')[0] // For easy filtering
-                });
-                
-                // Delete from active 'orders'
+                // UPDATE: Instead of archiving, change status to 'billing'
                 const docRef = db.collection("orders").doc(order.id);
-                batch.delete(docRef);
+                batch.update(docRef, { 
+                    status: 'billing',
+                    billRequestedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
             }
             await batch.commit();
             closePaymentModal();
         } catch (e) {
             console.error("Payment Error:", e);
-            alert("Error closing order. Check console.");
+            alert("Error sending to bill. Check console.");
         } finally {
             if(btn) {
                 btn.disabled = false;
@@ -554,7 +548,8 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             if (allServed) {
-                clearBtn.textContent = "💰 Paid & Close Table";
+                // CHANGED: "Paid & Close" -> "Send to Bill"
+                clearBtn.textContent = "📨 Send to Bill";
                 clearBtn.style.backgroundColor = "#006400"; 
                 clearBtn.disabled = false;
             } else {
@@ -600,8 +595,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let notesHtml = order.notes ? `<div style="font-style:italic; color:#888; font-size:0.8rem; margin-bottom:5px;">📝 "${order.notes}"</div>` : '';
 
+            // CHANGED: "Paid & Close" -> "Send to Bill"
             let buttonHtml = isCooked 
-                ? `<button class="clear-pickup-btn" style="background-color: #006400;" onclick="handleClearOrder('${order.id}', 'pickup-archive', this)">💰 Paid & Close</button>`
+                ? `<button class="clear-pickup-btn" style="background-color: #006400;" onclick="handleClearOrder('${order.id}', 'pickup-archive', this)">📨 Send to Bill</button>`
                 : `<button class="clear-pickup-btn" onclick="handleClearOrder('${order.id}', 'pickup-serve', this)">Mark Ready / Sent</button>`;
 
             pickupGrid.innerHTML += `
