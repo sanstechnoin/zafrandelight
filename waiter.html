@@ -249,7 +249,7 @@
                     Cancel
                 </button>
                 <button class="btn-submit-order" onclick="finalizePayment()" style="flex:1; padding: 15px; background: #006400; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 1.1rem; cursor: pointer; text-transform:uppercase;">
-                    ✅ Paid & Close
+                    📨 Send to Bill
                 </button>
             </div>
         </div>
@@ -258,42 +258,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="waiter-script.js?v=4"></script> 
-
-    <script>
-        // Use this function in your main waiter-script.js instead of showing the bill at the bottom
-        function openPaymentModal(tableId, totalAmount, itemsHtml) {
-            const modal = document.getElementById('payment-modal');
-            const title = document.getElementById('payment-title');
-            const list = document.getElementById('payment-items-list');
-            const total = document.getElementById('payment-total-display');
-
-            // Populate Data
-            title.innerText = "Rechnung: Tisch " + tableId; // "Bill: Table X"
-            total.innerText = totalAmount;
-            
-            // If you pass HTML for items, use it, otherwise simple text
-            if(itemsHtml) {
-                list.innerHTML = itemsHtml;
-            } else {
-                list.innerHTML = "<p style='color:#888; text-align:center;'>Details loading...</p>";
-            }
-
-            // Show Modal
-            modal.classList.remove('hidden');
-        }
-
-        function closePaymentModal() {
-            document.getElementById('payment-modal').classList.add('hidden');
-        }
-
-        // Hook this to your actual Firebase logic
-        function finalizePayment() {
-            // Trigger your existing closeTable() logic here
-            // Then close the modal
-            closePaymentModal();
-            // Note: You might need to call your existing function like: completeTable(currentTableId);
-        }
-    </script>
 
 </body>
 </html>
