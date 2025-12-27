@@ -1,4 +1,4 @@
-// --- 1. ZAFFRAN FIREBASE CONFIG ---
+// --- 1. CONFIG ---
 const firebaseConfig = {
   apiKey: "AIzaSyAVh2kVIuFcrt8Dg88emuEd9CQlqjJxDrA",
   authDomain: "zaffran-delight.firebaseapp.com",
@@ -7,9 +7,8 @@ const firebaseConfig = {
   messagingSenderId: "1022960860126",
   appId: "1:1022960860126:web:1e06693dea1d0247a0bb4f"
 };
-// --- END OF FIREBASE CONFIG ---
 
-// --- NEW: ZAFFRAN MASTER MENU LIST ---
+// --- MENU LIST FOR SEARCH ---
 const MENU_ITEMS = [
     { name: "Tomatensuppe", price: 5.00 },
     { name: "Daal Linsensuppe", price: 5.00 },
@@ -132,43 +131,54 @@ const MENU_ITEMS = [
     { name: "Mint-Margarita", price: 5.50 },
     { name: "Ipanema", price: 5.50 }
 ];
-// --- END MASTER MENU LIST ---
 
-// --- 2. Initialize Firebase ---
+function getDishNumber(name) {
+    const index = MENU_ITEMS.findIndex(item => item.name === name);
+    return index !== -1 ? ` - ${index + 1}` : "";
+}
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-// --- 3. Global State and DOM Elements ---
+// --- 2. GLOBAL STATE ---
+let activeBillOrders = []; 
+let currentSelectedTable = null; 
+const BILLING_PASSWORD = "zafran"; 
+
 document.addEventListener("DOMContentLoaded", () => {
-    const connectionIconEl = document.getElementById('connection-icon');
+    // Elements
     const loginOverlay = document.getElementById('billing-login-overlay');
     const loginButton = document.getElementById('login-button');
     const passwordInput = document.getElementById('billing-password');
     const loginError = document.getElementById('login-error');
     const contentWrapper = document.getElementById('billing-content-wrapper');
+    const statusDot = document.getElementById('status-dot');
+    const connectionText = document.getElementById('connection-text');
+    
+    const billingListEl = document.getElementById('billing-list');
+    const activeBillsCountEl = document.getElementById('active-bills-count');
+    const pendingAmountEl = document.getElementById('pending-amount');
 
-    const tableListEl = document.getElementById('table-list');
-    const billViewEl = document.getElementById('bill-view-container');
-    const billTableNumberEl = document.getElementById('bill-table-number');
-    const billItemListEl = document.getElementById('bill-item-list');
-    const billTotalAmountEl = document.getElementById('bill-total-amount');
-    const addItemForm = document.getElementById('add-item-form');
-    const closeBillBtn = document.getElementById('close-bill-btn');
+    // Panel Elements
+    const detailPanel = document.getElementById('detailPanel');
+    const panelTitle = document.getElementById('panel-title');
+    const panelItemsList = document.getElementById('bill-items-list');
+    const panelTotalEl = document.getElementById('panel-total');
+    
+    // Manual Item
+    const menuSearchInput = document.getElementById('billing-menu-search');
+    const menuDropdown = document.getElementById('billing-menu-list');
+    const manualQty = document.getElementById('manual-qty');
+    const manualPrice = document.getElementById('manual-price');
+    const manualAddBtn = document.getElementById('manual-add-btn');
 
-    const itemNameInput = document.getElementById('item-name');
-    const itemQtyInput = document.getElementById('item-qty');
-    const itemPriceInput = document.getElementById('item-price');
-    const menuDatalist = document.getElementById('menu-items-list');
-
-    let allCookedOrders = []; 
-    let currentSelectedTable = null; 
-    const BILLING_PASSWORD = "zafran"; // <-- NEW PASSWORD
-
-    // --- 4. Login Logic ---
+    // Login
     loginButton.addEventListener('click', () => {
         if (passwordInput.value === BILLING_PASSWORD) {
-            loginOverlay.classList.add('hidden');
+            loginOverlay.style.display = 'none';
             contentWrapper.style.opacity = '1'; 
+            statusDot.classList.add('online');
+            connectionText.textContent = "System Online";
             initializeBilling(); 
         } else {
             loginError.style.display = 'block';
@@ -176,280 +186,318 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     passwordInput.addEventListener('keyup', (e) => e.key === 'Enter' && loginButton.click());
 
-
-    // --- 5. Main Billing Functions ---
     function initializeBilling() {
-        populateDatalist(); 
-
+        // LISTENER: ONLY 'billing' status
         db.collection("orders")
-          .where("status", "==", "cooked") 
+          .where("status", "==", "billing") 
           .onSnapshot(
             (snapshot) => {
-                connectionIconEl.textContent = '✅';
-                allCookedOrders = snapshot.docs.map(doc => doc.data());
-                renderTableList();
+                activeBillOrders = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                renderBillingTable();
+                updateKPIs();
+                // Refresh panel if open
                 if (currentSelectedTable) {
-                    renderBillForTable(currentSelectedTable);
+                    openBillPanel(currentSelectedTable);
+                } else {
+                    closePanel();
                 }
             },
             (error) => {
-                console.error("Error connecting to Firestore: ", error);
-                connectionIconEl.textContent = '❌';
+                console.error("Error:", error);
+                connectionText.textContent = "Offline";
+                statusDot.classList.remove('online');
             }
         );
-        
-        itemNameInput.addEventListener('input', handleItemSearch);
 
-        // Add Manual Item Form
-        addItemForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!currentSelectedTable) return;
-
-            const name = itemNameInput.value;
-            const qty = parseInt(itemQtyInput.value);
-            const price = parseFloat(itemPriceInput.value);
-            
-            if (!name || isNaN(qty) || isNaN(price) || qty <= 0 || price < 0) {
-                alert("Please enter valid item details.");
+        // --- SEARCH LOGIC (Manual Item) ---
+        menuSearchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            if(query.length === 0) {
+                menuDropdown.classList.remove('show');
                 return;
             }
+            
+            const filtered = MENU_ITEMS.filter((item, index) => {
+                const num = (index + 1).toString();
+                return item.name.toLowerCase().includes(query) || num.includes(query);
+            });
 
-            const newOrderId = `${currentSelectedTable}-manual-${new Date().getTime()}`;
-            const isPickup = allCookedOrders.some(order => order.table === currentSelectedTable && order.orderType === 'pickup');
+            renderDropdown(filtered);
+        });
 
+        // Hide dropdown on outside click
+        document.addEventListener('click', (e) => {
+            if(!e.target.closest('.billing-search-box')) {
+                menuDropdown.classList.remove('show');
+            }
+        });
+
+        // Manual Item Add Button
+        manualAddBtn.addEventListener('click', async () => {
+            if(!currentSelectedTable) return;
+            
+            const name = menuSearchInput.value.trim(); // Can be custom text too
+            const qty = parseInt(manualQty.value);
+            const price = parseFloat(manualPrice.value);
+            
+            if(!name || isNaN(qty) || isNaN(price)) { alert("Please check item details."); return; }
+            
+            const newId = `${currentSelectedTable}-manual-${Date.now()}`;
+            const existing = activeBillOrders.find(o => o.table === currentSelectedTable);
+            
             const newItem = {
-                id: newOrderId,
-                table: currentSelectedTable, 
-                items: [{ name: name, quantity: qty, price: price }], 
-                status: "cooked", 
+                id: newId,
+                table: currentSelectedTable,
+                items: [{ name, quantity: qty, price }],
+                status: "billing",
                 createdAt: new Date(),
-                orderType: isPickup ? "pickup" : "dine-in",
-                // Get customer name and phone from the 'table' identifier
-                customerName: isPickup ? currentSelectedTable.split(' (')[0] : null, 
-                customerPhone: isPickup ? currentSelectedTable.split(' (')[1].replace(')','') : null, 
-                name: name,
-                quantity: qty,
-                price: price
+                orderType: existing ? existing.orderType : 'dine-in',
+                customerName: existing ? existing.customerName : 'Manual',
+                isManual: true
             };
             
             try {
-                await db.collection("orders").doc(newOrderId).set(newItem);
-                addItemForm.reset();
-            } catch (err) {
-                console.error("Error adding manual item: ", err);
-                alert("Failed to add item. Check console.");
-            }
-        });
-
-        // Close Bill Button
-        closeBillBtn.addEventListener('click', async () => {
-            if (!currentSelectedTable) return;
-
-            const confirmMessage = `Are you sure you want to CLOSE and ARCHIVE the bill for ${currentSelectedTable}? This cannot be undone.`;
-            if (!confirm(confirmMessage)) {
-                return;
-            }
-            
-            const ordersToClose = allCookedOrders.filter(order => order.table === currentSelectedTable);
-            
-            if (ordersToClose.length === 0) return;
-            
-            let finalBillItems = [];
-            let finalBillTotal = 0;
-
-            ordersToClose.forEach(order => {
-                const items = order.items || [{ name: order.name, quantity: order.quantity, price: order.price }];
-                items.forEach(item => {
-                    finalBillItems.push({
-                        name: item.name,
-                        quantity: item.quantity,
-                        price: item.price
-                    });
-                    finalBillTotal += (item.price || 0) * (item.quantity || 1);
-                });
-            });
-
-            const archiveDoc = {
-                table: currentSelectedTable, // This is the Table # or "Name (Phone)"
-                items: finalBillItems,
-                total: finalBillTotal,
-                closedAt: new Date()
-            };
-
-            try {
-                const archiveId = `archive-${new Date().getTime()}`;
-                await db.collection("archived_orders").doc(archiveId).set(archiveDoc);
-
-                const batch = db.batch();
-                ordersToClose.forEach(order => {
-                    batch.delete(db.collection("orders").doc(order.id));
-                });
-                await batch.commit();
-
-                console.log(`Bill for ${currentSelectedTable} has been archived and closed.`);
-                billViewEl.classList.add('hidden'); 
-                currentSelectedTable = null;
-            
-            } catch (err) {
-                console.error("Error archiving bill: ", err);
-                alert("Error closing bill. Check the console.");
-            }
-        });
-    } // End initializeBilling()
-
-    function renderTableList() {
-        const tablesWithBills = [...new Set(allCookedOrders.map(order => order.table))];
-        
-        tablesWithBills.sort((a, b) => {
-            const aIsNum = !isNaN(parseInt(a));
-            const bIsNum = !isNaN(parseInt(b));
-
-            if (aIsNum && !bIsNum) return -1; 
-            if (!aIsNum && bIsNum) return 1;  
-            if (aIsNum && bIsNum) return parseInt(a) - parseInt(b); 
-            return a.localeCompare(b); 
-        });
-        
-        tableListEl.innerHTML = ""; 
-        
-        if (tablesWithBills.length === 0) {
-            tableListEl.innerHTML = "<p>No open bills.</p>";
-            return;
-        }
-
-        tablesWithBills.forEach(tableIdentifier => {
-            const button = document.createElement('button');
-            button.className = 'table-list-btn';
-            
-            const order = allCookedOrders.find(o => o.table === tableIdentifier);
-            
-            if (order && order.orderType === 'pickup') {
-                button.innerHTML = `🛍️ ${tableIdentifier}`; // "Name (Phone)"
-            } else {
-                button.innerHTML = `Table ${tableIdentifier}`; 
-            }
-            
-            button.dataset.tableId = tableIdentifier;
-            
-            if (tableIdentifier === currentSelectedTable) {
-                button.classList.add('selected');
-            }
-            
-            button.addEventListener('click', () => {
-                renderBillForTable(tableIdentifier);
-            });
-            tableListEl.appendChild(button);
+                await db.collection("orders").doc(newId).set(newItem);
+                // Reset inputs
+                menuSearchInput.value = ""; 
+                manualQty.value = "1";
+                manualPrice.value = "";
+                menuDropdown.classList.remove('show');
+            } catch(e) { console.error(e); }
         });
     }
 
-    function renderBillForTable(tableIdentifier) {
-        currentSelectedTable = tableIdentifier;
-        
-        document.querySelectorAll('.table-list-btn').forEach(btn => {
-            btn.classList.toggle('selected', btn.dataset.tableId === tableIdentifier);
-        });
-
-        const tableOrders = allCookedOrders.filter(order => order.table === tableIdentifier);
-        
-        if (tableOrders.length === 0) {
-            billViewEl.classList.add('hidden');
-            currentSelectedTable = null;
-            renderTableList(); 
+    function renderDropdown(items) {
+        menuDropdown.innerHTML = "";
+        if(items.length === 0) {
+            menuDropdown.classList.remove('show');
             return;
         }
-        
-        const isPickup = tableOrders.some(order => order.orderType === 'pickup');
 
-        billViewEl.classList.remove('hidden');
+        items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'billing-menu-item';
+            div.innerHTML = `<span>${item.name} <strong style="color:var(--gold);">${getDishNumber(item.name)}</strong></span><span>${item.price.toFixed(2)} €</span>`;
+            
+            div.addEventListener('click', () => {
+                menuSearchInput.value = item.name;
+                manualPrice.value = item.price.toFixed(2);
+                manualQty.value = "1";
+                menuDropdown.classList.remove('show');
+            });
+            menuDropdown.appendChild(div);
+        });
+        menuDropdown.classList.add('show');
+    }
+
+    function updateKPIs() {
+        const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
+        activeBillsCountEl.textContent = uniqueTables.length;
         
-        if (isPickup) {
-            billTableNumberEl.innerHTML = `🛍️ ${tableIdentifier}`; // "Name (Phone)"
-        } else {
-            billTableNumberEl.innerHTML = `Table ${tableIdentifier}`; 
-        }
-        
-        billItemListEl.innerHTML = "";
         let total = 0;
-
-        tableOrders.forEach(order => {
-            const items = order.items || [{ name: order.name, quantity: order.quantity, price: order.price }];
-            
-            items.forEach((item, index) => {
-                const itemTotal = (item.price || 0) * (item.quantity || 1);
-                total += itemTotal;
-                
-                const li = document.createElement('li');
-                li.className = 'bill-item';
-                
-                li.innerHTML = `
-                    <span class="item-name">${item.quantity}x ${item.name}</span>
-                    <span class="item-price">${itemTotal.toFixed(2)} €</span>
-                    <button class="bill-delete-item" data-order-id="${order.id}" data-item-index="${index}">×</button>
-                `;
-                billItemListEl.appendChild(li);
-            });
+        activeBillOrders.forEach(o => {
+            o.items.forEach(i => total += (i.price * i.quantity));
         });
-
-        billTotalAmountEl.textContent = `${total.toFixed(2)} €`;
-        
-        addDeleteButtonListeners();
+        pendingAmountEl.textContent = total.toFixed(2) + " €";
     }
 
-    function addDeleteButtonListeners() {
-        document.querySelectorAll('.bill-delete-item').forEach(btn => {
-            btn.replaceWith(btn.cloneNode(true));
-        });
+    function renderBillingTable() {
+        billingListEl.innerHTML = "";
+        const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
         
-        document.querySelectorAll('.bill-delete-item').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const orderId = btn.dataset.orderId;
-                const itemIndex = parseInt(btn.dataset.itemIndex); 
-                btn.disabled = true;
-
-                try {
-                    const docRef = db.collection("orders").doc(orderId);
-                    const doc = await docRef.get();
-
-                    if (!doc.exists) {
-                        console.error("Document does not exist, cannot delete item.");
-                        return;
-                    }
-
-                    const orderData = doc.data();
-                    const items = orderData.items;
-
-                    if (!items || items.length === 1) {
-                        await docRef.delete();
-                    } else {
-                        items.splice(itemIndex, 1);
-                        await docRef.update({ items: items });
-                    }
-                } catch (err) {
-                    console.error("Error deleting item:", err);
-                    btn.disabled = false; 
-                }
-            });
-        });
-    }
-
-    // --- NEW HELPER FUNCTIONS ---
-    function populateDatalist() {
-        menuDatalist.innerHTML = ""; // Clear any existing
-        MENU_ITEMS.forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.name;
-            menuDatalist.appendChild(option);
-        });
-    }
-
-    function handleItemSearch() {
-        const query = itemNameInput.value;
-        const match = MENU_ITEMS.find(item => item.name.toLowerCase() === query.toLowerCase());
-        
-        if (match) {
-            itemPriceInput.value = match.price.toFixed(2);
-        } else {
-            itemPriceInput.value = ''; // Clear price if no match
+        if (uniqueTables.length === 0) {
+            billingListEl.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px; color:#666;">No active bills.</td></tr>`;
+            return;
         }
+
+        uniqueTables.sort();
+
+        uniqueTables.forEach(table => {
+            const orders = activeBillOrders.filter(o => o.table === table);
+            let tableTotal = 0;
+            let type = "Dine-In";
+            let earliestTime = new Date();
+            let customerName = `Table ${table}`;
+
+            orders.forEach(o => {
+                o.items.forEach(i => tableTotal += (i.price * i.quantity));
+                if(o.orderType === 'pickup') { type = "Pickup"; customerName = o.customerName; }
+                if(o.orderType === 'delivery') { type = "Delivery"; customerName = o.customerName; }
+                if(o.billRequestedAt && o.billRequestedAt.toDate() < earliestTime) earliestTime = o.billRequestedAt.toDate();
+                else if(o.createdAt && o.createdAt.toDate() < earliestTime) earliestTime = o.createdAt.toDate();
+            });
+
+            const minsAgo = Math.floor((new Date() - earliestTime) / 60000);
+            
+            let badgeClass = type === 'Pickup' ? 'badge-pickup' : (type === 'Delivery' ? 'badge-delivery' : 'badge-dinein');
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight:bold; color:white;">${customerName}</td>
+                <td>${minsAgo} mins ago</td>
+                <td><span class="badge ${badgeClass}">${type}</span></td>
+                <td style="text-align:right; font-family:monospace; color:var(--gold); font-size:1.1rem;">${tableTotal.toFixed(2)} €</td>
+                <td style="text-align:center;">
+                    <button class="btn-action btn-print" style="padding:5px 10px; font-size:0.8rem;" onclick="openBillPanel('${table}')">Review</button>
+                </td>
+            `;
+            billingListEl.appendChild(tr);
+        });
+    }
+
+    // --- PANEL LOGIC ---
+    window.openBillPanel = function(tableId) {
+        currentSelectedTable = tableId;
+        const orders = activeBillOrders.filter(o => o.table === tableId);
+        if(orders.length === 0) { closePanel(); return; }
+
+        let isPickup = orders.some(o => o.orderType === 'pickup' || o.orderType === 'delivery');
+        let title = isPickup ? orders[0].customerName : `Table ${tableId}`;
+        panelTitle.textContent = title;
+
+        panelItemsList.innerHTML = "";
+        let grandTotal = 0;
+
+        orders.forEach(order => {
+            order.items.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                grandTotal += itemTotal;
+                const div = document.createElement('div');
+                div.className = 'receipt-item';
+                div.innerHTML = `
+                    <span>${item.quantity}x ${item.name}</span>
+                    <span>${itemTotal.toFixed(2)} €</span>
+                `;
+                panelItemsList.appendChild(div);
+            });
+        });
+
+        panelTotalEl.textContent = grandTotal.toFixed(2) + " €";
+        detailPanel.classList.add('open');
+    }
+
+    window.closePanel = function() {
+        detailPanel.classList.remove('open');
+        currentSelectedTable = null;
+    }
+
+    // --- ACTIONS ---
+    window.handlePrintAndClose = async function() {
+        if(!currentSelectedTable) return;
+        generateReceiptHTML(currentSelectedTable);
+        window.print(); // Browser Print Dialog
+        
+        // Confirm before archiving
+        setTimeout(async () => {
+            if(confirm("Confirm: Receipt printed & Payment received?")) {
+                await archiveCurrentBill(true);
+            }
+        }, 1000);
+    }
+
+    window.handleReprint = function() {
+        if(!currentSelectedTable) return;
+        generateReceiptHTML(currentSelectedTable);
+        window.print();
+    }
+
+    window.handlePaidAndClose = async function() {
+        if(!currentSelectedTable) return;
+        if(confirm("Close bill without printing?")) {
+            await archiveCurrentBill(true);
+        }
+    }
+
+    window.handleCancel = async function() {
+        if(!currentSelectedTable) return;
+        if(confirm("Cancel billing request? This will send orders back to the Waiter.")) {
+            const orders = activeBillOrders.filter(o => o.table === currentSelectedTable);
+            const batch = db.batch();
+            orders.forEach(o => {
+                const ref = db.collection("orders").doc(o.id);
+                batch.update(ref, { status: "cooked" }); // Send back to cooked
+            });
+            await batch.commit();
+            closePanel();
+        }
+    }
+
+    async function archiveCurrentBill(markPaid) {
+        const orders = activeBillOrders.filter(o => o.table === currentSelectedTable);
+        const total = parseFloat(panelTotalEl.textContent);
+        const archiveId = `archive-${Date.now()}`;
+        
+        let allItems = [];
+        orders.forEach(o => allItems.push(...o.items));
+
+        const archiveDoc = {
+            table: currentSelectedTable,
+            items: allItems,
+            total: total,
+            paidAmount: total,
+            closedAt: new Date(),
+            orderType: orders[0].orderType,
+            customerName: orders[0].customerName || null
+        };
+
+        try {
+            const batch = db.batch();
+            
+            // 1. Create Archive Record
+            const archiveRef = db.collection("archived_orders").doc(archiveId);
+            batch.set(archiveRef, archiveDoc);
+
+            // 2. Delete Active Orders
+            orders.forEach(o => {
+                const ref = db.collection("orders").doc(o.id);
+                batch.delete(ref);
+            });
+
+            await batch.commit();
+            closePanel();
+        } catch(e) {
+            console.error("Archive Error", e);
+            alert("Error closing bill");
+        }
+    }
+
+    function generateReceiptHTML(tableId) {
+        const orders = activeBillOrders.filter(o => o.table === tableId);
+        const container = document.getElementById('receipt-print-area');
+        const total = document.getElementById('panel-total').textContent;
+        const dateStr = new Date().toLocaleString('de-DE');
+
+        let itemsHtml = "";
+        orders.forEach(o => {
+            o.items.forEach(i => {
+                itemsHtml += `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-family:monospace;">
+                        <span>${i.quantity} x ${i.name}</span>
+                        <span>${(i.price * i.quantity).toFixed(2)}</span>
+                    </div>
+                `;
+            });
+        });
+
+        container.innerHTML = `
+            <div style="text-align:center; font-family:monospace; width:300px; margin:0 auto;">
+                <h2 style="margin:0;">Zaffran Delight</h2>
+                <p style="margin:5px 0;">Oststr. 3, 53879 Euskirchen</p>
+                <p style="margin:5px 0;">Tel: 02251 / 123456</p>
+                <hr style="border-top:1px dashed #000;">
+                <p style="text-align:left;">Table: ${tableId}<br>Date: ${dateStr}</p>
+                <hr style="border-top:1px dashed #000;">
+                <div style="text-align:left;">
+                    ${itemsHtml}
+                </div>
+                <hr style="border-top:1px dashed #000;">
+                <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.2em;">
+                    <span>TOTAL</span>
+                    <span>${total}</span>
+                </div>
+                <hr style="border-top:1px dashed #000;">
+                <p style="margin-top:20px;">Thank you for your visit!</p>
+            </div>
+        `;
     }
 });
