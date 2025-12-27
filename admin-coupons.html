@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zafran Admin - Dashboard</title>
+    <link rel="icon" type="image/png" href="favlogo.png">
+    <style>
+        /* --- KDS THEME VARIABLES --- */
+        :root {
+            --bg-dark: #1a1a1a;        
+            --card-bg: #2a2a2a;      
+            --gold: #D4AF37;
+            --text-main: #f0f0f0;
+            --text-subtle: #aaa;
+            --border-color: #444;
+            --success-green: #28a745;
+            --danger-red: #dc3545;
+        }
+
+        body { 
+            background-color: var(--bg-dark); 
+            color: var(--text-main); 
+            padding: 20px; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        
+        .admin-container { 
+            max-width: 900px; 
+            width: 100%;
+            margin: 0 auto 30px auto; 
+            background: var(--card-bg); 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+        }
+
+        /* Header Logo */
+        .header-logo {
+            display: block;
+            height: 60px;
+            margin: 0 auto 10px auto;
+        }
+        
+        h2 { 
+            border-bottom: 2px solid var(--gold); 
+            padding-bottom: 10px; 
+            margin-bottom: 20px; 
+            color: var(--gold); 
+            text-align: center;
+            text-transform: uppercase;
+            font-size: 1.4rem;
+            letter-spacing: 1px;
+        }
+
+        /* Grid Layout */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .form-group { margin-bottom: 15px; }
+        .full-width { grid-column: span 2; }
+        
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 0.9rem; color: var(--gold); }
+        
+        input[type="text"], input[type="number"], input[type="date"], input[type="password"], select { 
+            width: 100%; padding: 12px; 
+            border: 1px solid var(--border-color); 
+            background-color: #111;
+            color: white;
+            border-radius: 4px; box-sizing: border-box; font-size: 1rem;
+        }
+        input:focus, select:focus { border-color: var(--gold); outline: none; }
+        
+        /* Radio Group */
+        .radio-group { display: flex; gap: 20px; padding: 10px 0; }
+        .radio-item { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 1rem; }
+        .radio-item input { accent-color: var(--gold); transform: scale(1.2); cursor: pointer; }
+
+        /* Checkbox Group */
+        .checkbox-group { 
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); 
+            gap: 10px; margin-top: 5px; 
+            background: #111; 
+            padding: 15px; border-radius: 4px; border: 1px solid var(--border-color); 
+        }
+        .checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+        .checkbox-item input { accent-color: var(--gold); transform: scale(1.1); }
+
+        /* Buttons */
+        button { 
+            background-color: var(--gold); 
+            color: #000; border: none; padding: 12px; width: 100%; 
+            font-size: 1rem; cursor: pointer; border-radius: 4px; 
+            font-weight: bold; margin-top: 10px; transition: background 0.2s; 
+            text-transform: uppercase;
+        }
+        button:hover { background-color: #fff; }
+        button:disabled { background-color: #555; color: #888; cursor: not-allowed; }
+        
+        button.btn-blue { background-color: #007bff; color: white; }
+        button.btn-blue:hover { background-color: #0056b3; }
+
+        /* Messages */
+        .message-box { margin-top: 15px; padding: 12px; text-align: center; border-radius: 4px; display: none; font-weight: bold; font-size: 0.9rem; }
+        .success { background-color: rgba(40, 167, 69, 0.2); color: #2ecc71; border: 1px solid #2ecc71; display: block; }
+        .error { background-color: rgba(220, 53, 69, 0.2); color: #ff6b6b; border: 1px solid #ff6b6b; display: block; }
+        .required-star { color: var(--danger-red); }
+
+        /* Table */
+        .coupon-list-section { margin-top: 40px; border-top: 2px solid var(--border-color); padding-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.95rem; background: #222; border-radius: 4px; overflow: hidden; }
+        th { background-color: #111; color: var(--gold); padding: 12px; text-align: left; font-size: 0.9rem; border-bottom: 2px solid var(--border-color); }
+        td { padding: 12px; border-bottom: 1px solid #333; vertical-align: middle; color: #ddd; }
+        tr:hover { background-color: #2f2f2f; }
+        
+        /* Badges */
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; color: black; }
+        .badge-percent { background: #90caf9; }
+        .badge-fixed { background: #a5d6a7; }
+        
+        /* Status */
+        .status-active { color: #2ecc71; font-weight: bold; background: rgba(46, 204, 113, 0.1); padding: 4px 8px; border-radius: 4px; }
+        .status-inactive { color: #e74c3c; font-weight: bold; background: rgba(231, 76, 60, 0.1); padding: 4px 8px; border-radius: 4px; }
+        
+        .btn-action-x {
+            background-color: var(--danger-red); color: white; border: none; 
+            width: 28px; height: 28px; border-radius: 50%; 
+            cursor: pointer; font-weight: bold; font-family: sans-serif;
+            margin-left: 5px; line-height: 28px; text-align: center; padding: 0; font-size: 0.9rem;
+        }
+        .btn-action-x:hover { background-color: #ff6b6b; transform: scale(1.1); }
+
+        /* Footer */
+        .admin-footer {
+            margin-top: auto; text-align: center; padding: 15px;
+            font-size: 0.8rem; color: #666; border-top: 1px solid var(--border-color);
+            background: var(--bg-dark);
+        }
+
+        /* --- LOGIN OVERLAY --- */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark); z-index: 10000;
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column;
+        }
+        .login-box {
+            background: var(--card-bg); padding: 40px; border-radius: 8px;
+            border: 2px solid var(--gold); text-align: center; width: 90%; max-width: 400px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+        .login-box img { height: 80px; margin-bottom: 20px; }
+        
+        /* CUSTOM MODAL */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 5000; justify-content: center; align-items: center; }
+        .modal-box { background: var(--card-bg); padding: 30px; border-radius: 8px; width: 90%; max-width: 400px; text-align: center; border: 2px solid var(--gold); color: white; }
+        .modal-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 15px; color: var(--gold); }
+        .modal-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .btn-modal { padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1rem; color: white; width: 100%; }
+        .btn-reactivate { background-color: #007bff; }
+        .btn-confirm-delete { background-color: #dc3545; }
+        .btn-cancel { background-color: #6c757d; }
+
+    </style>
+</head>
+<body>
+
+<div id="login-overlay">
+    <div class="login-box">
+        <img src="logo.png" alt="Zafran">
+        <h3 style="color:var(--gold); margin-bottom:20px;">ADMIN LOGIN</h3>
+        <form id="login-form">
+            <input type="password" id="admin-password" placeholder="Passwort eingeben" required style="text-align:center; margin-bottom:15px;">
+            <button type="submit">Einloggen</button>
+            <p id="login-error" style="color:red; margin-top:10px; font-size:0.9rem;"></p>
+        </form>
+    </div>
+</div>
+
+<div id="admin-content" style="display:none;">
+
+    <div class="admin-container">
+        <img src="logo.png" alt="Zafran Logo" class="header-logo">
+        <h2>Webseiten Einstellungen</h2>
+        
+        <form id="settings-form">
+            <div class="form-group">
+                <label>Laufschrift (Marquee) Text</label>
+                <input type="text" id="marqueeText" placeholder="z.B. Willkommen! 10% Rabatt bei Abholung...">
+                <small style="color:#888;">Leer lassen, um die Laufschrift auszuschalten.</small>
+            </div>
+
+            <div class="form-group">
+                <label>WhatsApp Nummer (Internationales Format)</label>
+                <input type="text" id="whatsappNumber" placeholder="4915123456789">
+            </div>
+
+            <button type="submit" id="settingsBtn" class="btn-blue">Einstellungen Speichern</button>
+            <div id="settings-message" class="message-box"></div>
+        </form>
+    </div>
+
+    <div class="admin-container">
+        <h2>Coupon Manager</h2>
+        <form id="coupon-form">
+            <div class="form-grid">
+                
+                <div class="form-group">
+                    <label>Gutschein-Code <span class="required-star">*</span></label>
+                    <input type="text" id="code" required style="text-transform: uppercase;" placeholder="z.B. SOMMER25">
+                </div>
+
+                <div class="form-group">
+                    <label>Gültigkeits-Modus <span class="required-star">*</span></label>
+                    <select id="validityMode" onchange="toggleDateInputs()">
+                        <option value="range" selected>📅 Datums-Bereich (Standard)</option>
+                        <option value="recurring">🔄 Monatlich Wiederkehrend</option>
+                    </select>
+                </div>
+
+                <div id="rangeInputs" class="form-group-row full-width" style="background:#222; padding:15px; border-radius:4px; border:1px solid #444;">
+                    
+                    <div style="margin-bottom:15px;">
+                        <label class="checkbox-item" style="font-size:1rem; color:white;">
+                            <input type="checkbox" id="startNow" checked onchange="toggleStartField()">
+                            <span style="color:var(--gold); font-weight:bold;">Gültig ab sofort? (Heute)</span>
+                        </label>
+                    </div>
+
+                    <div style="display:flex; gap:20px; width:100%;">
+                        <div class="form-group" id="startDateGroup" style="flex:1; display:none;">
+                            <label>Gültig ab (Start)</label>
+                            <input type="date" id="startDate">
+                        </div>
+                        
+                        <div class="form-group" style="flex:1;">
+                            <label>Gültig bis (Ende) <span class="required-star">*</span></label>
+                            <input type="date" id="expiry">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="recurringInputs" class="form-group full-width" style="display:none;">
+                    <label>In welcher Woche gültig?</label>
+                    <select id="recurringRule">
+                        <option value="week1">1. Woche des Monats (Tag 1-7)</option>
+                        <option value="week2">2. Woche des Monats (Tag 8-14) [z.B. Lamm]</option>
+                        <option value="week3">3. Woche des Monats (Tag 15-21) [z.B. Huhn]</option>
+                        <option value="week4">4. Woche des Monats (Tag 22-Ende)</option>
+                    </select>
+                    <small style="color: var(--text-subtle); display:block; margin-top:5px;">Dieser Coupon aktiviert sich jeden Monat automatisch in der gewählten Woche.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Rabatt Typ <span class="required-star">*</span></label>
+                    <div class="radio-group">
+                        <label class="radio-item"><input type="radio" name="discountType" value="percent" checked> Prozent (%)</label>
+                        <label class="radio-item"><input type="radio" name="discountType" value="fixed"> Euro (€)</label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Rabatt Wert <span class="required-star">*</span></label>
+                    <input type="number" id="discountValue" min="0.1" step="0.1" placeholder="z.B. 10" required>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Mindestbestellwert (€) <span class="required-star">*</span></label>
+                    <input type="number" id="minOrder" value="20" min="0" required>
+                </div>
+
+                <div class="form-group full-width">
+                    <label>Gültig für Kategorien (Keine Auswahl = Alle Kategorien)</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="suppen"> Suppen</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="vorspeisen"> Vorspeisen</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="veganes"> Veganes</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="vegetarisches"> Vegetarisch</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="chicken"> Chicken</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="lamm"> Lamm</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="fisch-garnelen"> Fisch</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="tandoori"> Tandoori</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="biryani"> Biryani</label>
+                        <label class="checkbox-item"><input type="checkbox" name="cat" value="brot"> Brot</label>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" id="submitBtn">Coupon Speichern</button>
+            <div id="message" class="message-box"></div>
+        </form>
+
+        <div class="coupon-list-section">
+            <h3>Gespeicherte Coupons (Live)</h3>
+            <table id="coupons-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Rabatt</th>
+                        <th>Min.</th>
+                        <th>Gültigkeit</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Aktion</th>
+                    </tr>
+                </thead>
+                <tbody id="coupons-body">
+                    <tr><td colspan="6" style="text-align:center; padding: 20px;">Lade Daten...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <footer class="admin-footer">
+        <p>&copy; 2025 Zafran Delight. Created by Shri Avinash Narendhran S V</p>
+    </footer>
+
+</div>
+
+<div id="actionModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-title" id="modalTitle">Optionen für CODE</div>
+        <p style="margin-bottom: 20px; color: #ccc;">Was möchten Sie tun?</p>
+        <div class="modal-actions">
+            <button class="btn-modal btn-reactivate" id="btnReactivate">Bearbeiten / Reaktivieren</button>
+            <button class="btn-modal btn-confirm-delete" id="btnConfirmDelete">Endgültig löschen</button>
+            <button class="btn-modal btn-cancel" onclick="closeModal()">Abbrechen</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
+<script>
+    // --- 1. ADMIN CONFIGURATION ---
+    const ADMIN_PASSWORD = "zafran2025"; 
+
+    // --- 2. Initialize Firebase ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAVh2kVIuFcrt8Dg88emuEd9CQlqjJxDrA",
+      authDomain: "zaffran-delight.firebaseapp.com",
+      projectId: "zaffran-delight",
+      storageBucket: "zaffran-delight.firebasestorage.app",
+      messagingSenderId: "1022960860126",
+      appId: "1:1022960860126:web:1e06693dea1d0247a0bb4f"
+    };
+    
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    // --- 3. LOGIN LOGIC ---
+    document.addEventListener("DOMContentLoaded", () => {
+        if(sessionStorage.getItem('zafran_admin_logged_in') === 'true') {
+            showAdminContent();
+        }
+
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('admin-password').value;
+            if(input === ADMIN_PASSWORD) {
+                sessionStorage.setItem('zafran_admin_logged_in', 'true');
+                showAdminContent();
+            } else {
+                document.getElementById('login-error').textContent = "Falsches Passwort!";
+            }
+        });
+    });
+
+    function showAdminContent() {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('admin-content').style.display = 'block';
+        loadCoupons();
+        loadSettings();
+        toggleDateInputs();
+        toggleStartField(); // Init state of checkbox
+    }
+
+    // --- 4. UI TOGGLES (Date & Mode) ---
+    
+    // Toggle between Standard Range & Recurring
+    window.toggleDateInputs = function() {
+        const mode = document.getElementById('validityMode').value;
+        const rangeInputs = document.getElementById('rangeInputs');
+        const recurringInputs = document.getElementById('recurringInputs');
+        const endInput = document.getElementById('expiry');
+        
+        if (mode === 'recurring') {
+            rangeInputs.style.display = 'none';
+            recurringInputs.style.display = 'block';
+            endInput.required = false;
+        } else {
+            rangeInputs.style.display = 'block';
+            recurringInputs.style.display = 'none';
+            endInput.required = true;
+        }
+    }
+
+    // NEW: Toggle "Start Immediately" checkbox
+    window.toggleStartField = function() {
+        const isImmediate = document.getElementById('startNow').checked;
+        const startGroup = document.getElementById('startDateGroup');
+        const startInput = document.getElementById('startDate');
+
+        if (isImmediate) {
+            startGroup.style.display = 'none';
+            startInput.required = false;
+        } else {
+            startGroup.style.display = 'block';
+            startInput.required = true;
+            // Pre-fill with today if empty, just for UX
+            if(!startInput.value) {
+                startInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+    }
+
+    // --- 5. SETTINGS LOGIC ---
+    const settingsForm = document.getElementById('settings-form');
+    const settingsMsg = document.getElementById('settings-message');
+
+    function loadSettings() {
+        db.collection('settings').doc('general').get().then((doc) => {
+            if (doc.exists) {
+                const data = doc.data();
+                document.getElementById('marqueeText').value = data.marqueeText || "";
+                document.getElementById('whatsappNumber').value = data.whatsappNumber || "";
+            }
+        }).catch((error) => console.error("Error loading settings:", error));
+    }
+
+    settingsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('settingsBtn');
+        btn.disabled = true;
+        btn.innerText = "Speichern...";
+        
+        const marqueeText = document.getElementById('marqueeText').value.trim();
+        const whatsappNumber = document.getElementById('whatsappNumber').value.trim();
+
+        try {
+            await db.collection('settings').doc('general').set({
+                marqueeText: marqueeText,
+                whatsappNumber: whatsappNumber,
+                updatedAt: new Date()
+            }, { merge: true });
+
+            settingsMsg.textContent = "Einstellungen erfolgreich gespeichert!";
+            settingsMsg.className = "message-box success";
+        } catch (error) {
+            console.error(error);
+            settingsMsg.textContent = "Fehler beim Speichern.";
+            settingsMsg.className = "message-box error";
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Einstellungen Speichern";
+        }
+    });
+
+    // --- 6. COUPON LOGIC ---
+    const form = document.getElementById('coupon-form');
+    const msgDiv = document.getElementById('message');
+    const tableBody = document.getElementById('coupons-body');
+    const modal = document.getElementById('actionModal');
+    let couponsList = []; 
+    let selectedCouponId = null;
+
+    function loadCoupons() {
+        db.collection("coupons").orderBy("createdAt", "desc").get()
+        .then((querySnapshot) => {
+            tableBody.innerHTML = "";
+            couponsList = [];
+            if (querySnapshot.empty) {
+                tableBody.innerHTML = "<tr><td colspan='6' style='text-align:center; color: #666;'>Keine Coupons in der Datenbank gefunden.</td></tr>";
+                return;
+            }
+            querySnapshot.forEach((doc) => {
+                const data = doc.data();
+                couponsList.push(data);
+                const isPercent = data.discountType === 'percent';
+                const discountDisplay = isPercent ? `${data.discountValue}%` : `${data.discountValue}€`;
+                const badgeClass = isPercent ? 'badge-percent' : 'badge-fixed';
+                
+                // Display Validity
+                let validityDisplay = "";
+                if(data.mode === 'recurring') {
+                    if(data.recurringRule === 'week1') validityDisplay = "🔄 Mtl. Woche 1";
+                    if(data.recurringRule === 'week2') validityDisplay = "🔄 Mtl. Woche 2";
+                    if(data.recurringRule === 'week3') validityDisplay = "🔄 Mtl. Woche 3";
+                    if(data.recurringRule === 'week4') validityDisplay = "🔄 Mtl. Woche 4";
+                } else {
+                    // Calculate if started today
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    if(data.validFrom === todayStr) {
+                         validityDisplay = `Ab Heute bis ${data.validUntil}`;
+                    } else if(data.validFrom) {
+                         validityDisplay = `${data.validFrom} bis ${data.validUntil}`;
+                    } else if (data.expiryDate) {
+                        validityDisplay = `Bis ${data.expiryDate}`;
+                    }
+                }
+
+                // Status
+                let statusHtml = '<span class="status-active">Aktiv</span>';
+                if(data.mode !== 'recurring') {
+                    const today = new Date().toISOString().split('T')[0];
+                    const endDate = data.validUntil || data.expiryDate;
+                    if(endDate < today) {
+                        statusHtml = '<span class="status-inactive">Abgelaufen</span>';
+                    }
+                }
+
+                const row = `
+                    <tr>
+                        <td style="font-weight:bold; color: var(--gold);">${data.code}</td>
+                        <td><span class="badge ${badgeClass}">${discountDisplay}</span></td>
+                        <td>${data.minOrder}€</td>
+                        <td>${validityDisplay}</td>
+                        <td>${statusHtml}</td>
+                        <td style="text-align: right;">
+                            <button class="btn-action-x" onclick="openActionModal('${data.code}')">X</button>
+                        </td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+        })
+        .catch((error) => console.error("Error loading:", error));
+    }
+
+    window.openActionModal = function(code) {
+        selectedCouponId = code;
+        document.getElementById('modalTitle').innerText = `Optionen für "${code}"`;
+        modal.style.display = 'flex';
+        document.getElementById('btnReactivate').onclick = function() { reactivateCoupon(code); };
+        document.getElementById('btnConfirmDelete').onclick = function() { deleteCoupon(code); };
+    };
+
+    window.closeModal = function() {
+        modal.style.display = 'none';
+        selectedCouponId = null;
+    };
+
+    function deleteCoupon(code) {
+        db.collection("coupons").doc(code).delete()
+        .then(() => {
+            closeModal();
+            loadCoupons();
+        }).catch((error) => alert("Fehler: " + error.message));
+    }
+
+    function reactivateCoupon(code) {
+        const coupon = couponsList.find(c => c.code === code);
+        if (!coupon) return;
+        
+        document.getElementById('code').value = coupon.code;
+        document.getElementById('discountValue').value = coupon.discountValue;
+        document.getElementById('minOrder').value = coupon.minOrder;
+        
+        if(coupon.mode === 'recurring') {
+            document.getElementById('validityMode').value = 'recurring';
+            document.getElementById('recurringRule').value = coupon.recurringRule;
+        } else {
+            document.getElementById('validityMode').value = 'range';
+            
+            // Logic to handle "Start Now" checkbox state during edit
+            const todayStr = new Date().toISOString().split('T')[0];
+            const startInput = document.getElementById('startDate');
+            
+            // If validFrom is missing or today, assume "Start Now"
+            if(!coupon.validFrom || coupon.validFrom === todayStr) {
+                 document.getElementById('startNow').checked = true;
+            } else {
+                 document.getElementById('startNow').checked = false;
+                 startInput.value = coupon.validFrom;
+            }
+            document.getElementById('expiry').value = coupon.validUntil || coupon.expiryDate || ""; 
+        }
+        
+        toggleDateInputs();
+        toggleStartField();
+
+        const radios = document.getElementsByName('discountType');
+        for(let r of radios) { if(r.value === coupon.discountType) r.checked = true; }
+        
+        const checkboxes = document.querySelectorAll('input[name="cat"]');
+        if (coupon.validCategories === 'all') {
+            checkboxes.forEach(cb => cb.checked = false);
+        } else {
+            checkboxes.forEach(cb => { cb.checked = coupon.validCategories.includes(cb.value); });
+        }
+        
+        closeModal();
+        window.scrollTo({ top: 300, behavior: 'smooth' });
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        msgDiv.style.display = 'none';
+        
+        const code = document.getElementById('code').value.toUpperCase().trim();
+        const mode = document.getElementById('validityMode').value;
+        const discountType = document.querySelector('input[name="discountType"]:checked').value;
+        const discountValue = parseFloat(document.getElementById('discountValue').value);
+        const minOrder = parseFloat(document.getElementById('minOrder').value);
+        
+        let couponData = {
+            code: code,
+            mode: mode,
+            discountType: discountType,
+            discountValue: discountValue,
+            minOrder: minOrder,
+            createdAt: new Date().toISOString(),
+            active: true
+        };
+
+        if (mode === 'recurring') {
+            couponData.recurringRule = document.getElementById('recurringRule').value;
+            couponData.validFrom = null;
+            couponData.validUntil = null;
+            couponData.expiryDate = "Recurring";
+        } else {
+            // Check Start Date Logic
+            const isStartNow = document.getElementById('startNow').checked;
+            let start = "";
+            
+            if(isStartNow) {
+                // Set to today's date in YYYY-MM-DD
+                start = new Date().toISOString().split('T')[0];
+            } else {
+                start = document.getElementById('startDate').value;
+            }
+
+            const end = document.getElementById('expiry').value;
+            
+            if(!start || !end) return alert("Bitte Gültigkeitsdauer wählen!");
+            
+            couponData.validFrom = start;
+            couponData.validUntil = end;
+            couponData.expiryDate = end; 
+        }
+
+        if (!code || code.length < 2) return alert("Code zu kurz!");
+        
+        const selectedCats = [];
+        document.querySelectorAll('input[name="cat"]:checked').forEach(cb => selectedCats.push(cb.value));
+        couponData.validCategories = selectedCats.length > 0 ? selectedCats : 'all';
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerText = "Speichere...";
+
+        try {
+            await db.collection("coupons").doc(code).set(couponData);
+            
+            msgDiv.textContent = `Coupon "${code}" gespeichert!`;
+            msgDiv.className = 'message-box success';
+            msgDiv.style.display = 'block';
+            
+            form.reset();
+            // Reset Defaults
+            document.querySelector('input[value="percent"]').checked = true;
+            document.getElementById('minOrder').value = "20";
+            document.getElementById('validityMode').value = 'range';
+            document.getElementById('startNow').checked = true; // Reset checkbox
+            toggleDateInputs();
+            toggleStartField();
+            
+            loadCoupons();
+        } catch (error) {
+            console.error(error);
+            alert("Fehler: " + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Coupon Speichern";
+        }
+    });
+</script>
+
+</body>
+</html>
