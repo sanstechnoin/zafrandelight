@@ -149,7 +149,7 @@ let selectedMenuItem = null;
 // --- DISCOUNT STATE ---
 let currentSubtotal = 0;
 let currentDiscountVal = 0;
-let currentDiscountType = 'percent'; // 'percent' or 'fixed'
+let currentDiscountType = 'percent'; 
 
 document.addEventListener("DOMContentLoaded", () => {
     // Elements
@@ -192,18 +192,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const newBillInput = document.getElementById('new-bill-identifier');
 
     // Login
-    loginButton.addEventListener('click', () => {
-        if (passwordInput.value === BILLING_PASSWORD) {
-            loginOverlay.style.display = 'none';
-            contentWrapper.style.opacity = '1'; 
-            statusDot.classList.add('online');
-            connectionText.textContent = "System Online";
-            initializeBilling(); 
-        } else {
-            loginError.style.display = 'block';
-        }
-    });
-    passwordInput.addEventListener('keyup', (e) => e.key === 'Enter' && loginButton.click());
+    if(loginButton) {
+        loginButton.addEventListener('click', () => {
+            if (passwordInput.value === BILLING_PASSWORD) {
+                loginOverlay.style.display = 'none';
+                contentWrapper.style.opacity = '1'; 
+                statusDot.classList.add('online');
+                connectionText.textContent = "System Online";
+                initializeBilling(); 
+            } else {
+                loginError.style.display = 'block';
+            }
+        });
+        passwordInput.addEventListener('keyup', (e) => e.key === 'Enter' && loginButton.click());
+    }
 
     function initializeBilling() {
         // LISTENER: ONLY 'billing' status
@@ -216,7 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateKPIs();
                 // Refresh panel if open
                 if (currentSelectedTable) {
-                    openBillPanel(currentSelectedTable, false); // false = don't reset discount
+                    openBillPanel(currentSelectedTable, false);
                 } else {
                     closePanel();
                 }
@@ -229,67 +231,72 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
         // --- SEARCH LOGIC ---
-        menuSearchInput.addEventListener('input', (e) => {
-            selectedMenuItem = null; 
-            manualPrice.value = ""; 
-            const query = e.target.value.toLowerCase();
-            if(query.length === 0) { menuDropdown.classList.remove('show'); return; }
-            const filtered = MENU_ITEMS.filter((item, index) => {
-                const num = (index + 1).toString();
-                return item.name.toLowerCase().includes(query) || num.includes(query);
+        if(menuSearchInput) {
+            menuSearchInput.addEventListener('input', (e) => {
+                selectedMenuItem = null; 
+                manualPrice.value = ""; 
+                const query = e.target.value.toLowerCase();
+                if(query.length === 0) { menuDropdown.classList.remove('show'); return; }
+                const filtered = MENU_ITEMS.filter((item, index) => {
+                    const num = (index + 1).toString();
+                    return item.name.toLowerCase().includes(query) || num.includes(query);
+                });
+                renderDropdown(filtered);
             });
-            renderDropdown(filtered);
-        });
+        }
 
         document.addEventListener('click', (e) => {
-            if(!e.target.closest('.billing-search-box')) { menuDropdown.classList.remove('show'); }
+            if(menuDropdown && !e.target.closest('.billing-search-box')) { menuDropdown.classList.remove('show'); }
         });
 
         // --- DISCOUNT LISTENERS ---
-        discountInput.addEventListener('input', updateTotalsDisplay);
-        discountTypeSelect.addEventListener('change', updateTotalsDisplay);
+        if(discountInput) discountInput.addEventListener('input', updateTotalsDisplay);
+        if(discountTypeSelect) discountTypeSelect.addEventListener('change', updateTotalsDisplay);
 
         // --- MANUAL ADD ---
-        manualAddBtn.addEventListener('click', async () => {
-            if(!currentSelectedTable) { alert("No active bill selected."); return; }
-            if (!selectedMenuItem) { alert("Please select an item from the search list."); return; }
-            
-            const name = selectedMenuItem.name; 
-            const price = selectedMenuItem.price;
-            const qty = parseInt(manualQty.value);
-            
-            if(isNaN(qty) || qty < 1) { alert("Invalid quantity."); return; }
-            
-            const newId = `${currentSelectedTable}-manual-${Date.now()}`;
-            const existing = activeBillOrders.find(o => o.table === currentSelectedTable);
-            
-            const newItem = {
-                id: newId,
-                table: currentSelectedTable,
-                items: [{ name, quantity: qty, price }],
-                status: "billing",
-                createdAt: new Date(),
-                orderType: existing ? existing.orderType : 'dine-in',
-                customerName: existing ? existing.customerName : currentSelectedTable,
-                isManual: true
-            };
-            
-            try {
-                manualAddBtn.disabled = true;
-                manualAddBtn.innerText = "Adding...";
-                await db.collection("orders").doc(newId).set(newItem);
+        if(manualAddBtn) {
+            manualAddBtn.addEventListener('click', async () => {
+                if(!currentSelectedTable) { alert("No active bill selected."); return; }
+                if (!selectedMenuItem) { alert("Please select an item from the search list."); return; }
                 
-                menuSearchInput.value = ""; 
-                manualQty.value = "1";
-                manualPrice.value = "";
-                selectedMenuItem = null;
-                menuDropdown.classList.remove('show');
-            } catch(e) { console.error(e); alert("Failed to add item."); } 
-            finally { manualAddBtn.disabled = false; manualAddBtn.innerText = "ADD"; }
-        });
+                const name = selectedMenuItem.name; 
+                const price = selectedMenuItem.price;
+                const qty = parseInt(manualQty.value) || 1; // Default to 1 if empty
+                
+                if(qty < 1) { alert("Invalid quantity."); return; }
+                
+                const newId = `${currentSelectedTable}-manual-${Date.now()}`;
+                const existing = activeBillOrders.find(o => o.table === currentSelectedTable);
+                
+                const newItem = {
+                    id: newId,
+                    table: currentSelectedTable,
+                    items: [{ name, quantity: qty, price }],
+                    status: "billing",
+                    createdAt: new Date(),
+                    orderType: existing ? existing.orderType : 'dine-in',
+                    customerName: existing ? existing.customerName : currentSelectedTable,
+                    isManual: true
+                };
+                
+                try {
+                    manualAddBtn.disabled = true;
+                    manualAddBtn.innerText = "Adding...";
+                    await db.collection("orders").doc(newId).set(newItem);
+                    
+                    menuSearchInput.value = ""; 
+                    manualQty.value = "1";
+                    manualPrice.value = "";
+                    selectedMenuItem = null;
+                    menuDropdown.classList.remove('show');
+                } catch(e) { console.error(e); alert("Failed to add item. Check console."); } 
+                finally { manualAddBtn.disabled = false; manualAddBtn.innerText = "ADD"; }
+            });
+        }
     }
 
     function renderDropdown(items) {
+        if(!menuDropdown) return;
         menuDropdown.innerHTML = "";
         if(items.length === 0) { menuDropdown.classList.remove('show'); return; }
         items.forEach(item => {
@@ -310,17 +317,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateKPIs() {
         const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
-        activeBillsCountEl.textContent = uniqueTables.length;
+        if(activeBillsCountEl) activeBillsCountEl.textContent = uniqueTables.length;
         let total = 0;
         activeBillOrders.forEach(o => {
             if(o.items && Array.isArray(o.items)) {
                 o.items.forEach(i => total += (i.price * i.quantity));
             }
         });
-        pendingAmountEl.textContent = total.toFixed(2) + " €";
+        if(pendingAmountEl) pendingAmountEl.textContent = total.toFixed(2) + " €";
     }
 
     function renderBillingTable() {
+        if(!billingListEl) return;
         billingListEl.innerHTML = "";
         const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
         if (uniqueTables.length === 0) {
@@ -397,7 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         if(resetDiscount) {
-            discountInput.value = "";
+            if(discountInput) discountInput.value = "";
             currentDiscountVal = 0;
             currentDiscountType = 'percent';
         }
@@ -412,8 +420,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateTotalsDisplay() {
+        if(!discountInput) return;
         const val = parseFloat(discountInput.value) || 0;
-        const type = discountTypeSelect.value;
+        const type = discountTypeSelect ? discountTypeSelect.value : 'percent';
         currentDiscountVal = val;
         currentDiscountType = type;
 
@@ -424,18 +433,20 @@ document.addEventListener("DOMContentLoaded", () => {
             discountAmt = val;
         }
 
-        if(discountAmt > currentSubtotal) discountAmt = currentSubtotal; // Prevent negative
+        if(discountAmt > currentSubtotal) discountAmt = currentSubtotal;
 
         const finalTotal = currentSubtotal - discountAmt;
 
-        panelSubtotalEl.textContent = currentSubtotal.toFixed(2) + " €";
-        panelTotalEl.textContent = finalTotal.toFixed(2) + " €";
+        if(panelSubtotalEl) panelSubtotalEl.textContent = currentSubtotal.toFixed(2) + " €";
+        if(panelTotalEl) panelTotalEl.textContent = finalTotal.toFixed(2) + " €";
         
-        if(discountAmt > 0) {
-            panelDiscountRow.style.display = 'flex';
-            panelDiscountEl.textContent = "- " + discountAmt.toFixed(2) + " €";
-        } else {
-            panelDiscountRow.style.display = 'none';
+        if(panelDiscountRow && panelDiscountEl) {
+            if(discountAmt > 0) {
+                panelDiscountRow.style.display = 'flex';
+                panelDiscountEl.textContent = "- " + discountAmt.toFixed(2) + " €";
+            } else {
+                panelDiscountRow.style.display = 'none';
+            }
         }
     }
 
@@ -514,7 +525,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function archiveCurrentBill(markPaid) {
         const orders = activeBillOrders.filter(o => o.table === currentSelectedTable);
-        // Recalculate finals
+        
         let discountAmt = 0;
         if(currentDiscountType === 'percent') discountAmt = currentSubtotal * (currentDiscountVal / 100);
         else discountAmt = currentDiscountVal;
@@ -578,7 +589,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Recalc for print
         let discountAmt = 0;
         if(currentDiscountType === 'percent') discountAmt = currentSubtotal * (currentDiscountVal / 100);
         else discountAmt = currentDiscountVal;
