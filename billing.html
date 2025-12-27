@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cashier Station | Zaffran</title>
     <link rel="icon" type="image/png" href="favlogo.png">
-    <link rel="stylesheet" href="style.css?v=36">
+    <link rel="stylesheet" href="style.css?v=37">
     <style>
         /* --- ENTERPRISE THEME REUSE (SAP STYLE) --- */
         :root {
@@ -100,6 +100,22 @@
         .btn-cancel { background: #8B0000; color: white; }
         .btn-cancel:hover { background: #a00000; }
 
+        /* --- NEW: MENU SEARCH STYLES IN PANEL --- */
+        .billing-search-box { position: relative; margin-bottom: 10px; }
+        .billing-search-input { width: 100%; padding: 10px; background: #111; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        .billing-menu-dropdown {
+            position: absolute; top: 100%; left: 0; width: 100%;
+            background: #222; border: 1px solid #444; z-index: 100;
+            max-height: 200px; overflow-y: auto; display: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .billing-menu-dropdown.show { display: block; }
+        .billing-menu-item {
+            padding: 8px 10px; border-bottom: 1px solid #333; cursor: pointer;
+            display: flex; justify-content: space-between; font-size: 0.9rem;
+        }
+        .billing-menu-item:hover { background: #333; }
+
         /* PRINT STYLES */
         @media print {
             body * { visibility: hidden; }
@@ -170,14 +186,31 @@
                     <span>Total</span>
                     <span id="panel-total">0.00 €</span>
                 </div>
+                
                 <div style="margin-top:20px; padding-top:20px; border-top:1px dashed #444;">
-                    <h4 style="margin:0 0 10px 0; color:#888; font-size:0.9rem;">Quick Add Item</h4>
-                    <div style="display:flex; gap:5px;">
-                        <input type="text" id="manual-name" placeholder="Item Name" style="flex:2; padding:8px; background:#111; border:1px solid #444; color:white; border-radius:4px;">
-                        <input type="number" id="manual-price" placeholder="€" style="flex:1; padding:8px; background:#111; border:1px solid #444; color:white; border-radius:4px;">
-                        <button id="manual-add-btn" style="background:var(--gold); border:none; border-radius:4px; font-weight:bold; cursor:pointer;">+</button>
+                    <h4 style="margin:0 0 10px 0; color:var(--gold); font-size:0.9rem; text-transform:uppercase;">Add Extra Item</h4>
+                    
+                    <div class="billing-search-box">
+                        <input type="text" id="billing-menu-search" class="billing-search-input" placeholder="Search Name or No. (e.g. 5 or Butter)">
+                        <div id="billing-menu-list" class="billing-menu-dropdown">
+                            </div>
+                    </div>
+
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.75rem; color:#888;">Qty</label>
+                            <input type="number" id="manual-qty" value="1" min="1" style="width:100%; padding:10px; background:#111; border:1px solid #444; color:white; border-radius:4px;">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:0.75rem; color:#888;">Price (€)</label>
+                            <input type="number" id="manual-price" placeholder="0.00" step="0.01" style="width:100%; padding:10px; background:#111; border:1px solid #444; color:white; border-radius:4px;">
+                        </div>
+                        <div style="flex:1; display:flex; align-items:flex-end;">
+                            <button id="manual-add-btn" style="width:100%; padding:10px; background:var(--gold); border:none; border-radius:4px; font-weight:bold; cursor:pointer;">ADD</button>
+                        </div>
                     </div>
                 </div>
+
             </div>
             <div class="panel-footer">
                 <div style="display:flex; gap:10px;">
@@ -205,7 +238,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
-    <script src="billing-script.js?v=2"></script>
+    <script src="billing-script.js?v=3"></script>
 
 </body>
 </html>
