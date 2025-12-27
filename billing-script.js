@@ -144,6 +144,12 @@ const db = firebase.firestore();
 let activeBillOrders = []; 
 let currentSelectedTable = null; 
 const BILLING_PASSWORD = "zafran"; 
+let selectedMenuItem = null; 
+
+// --- DISCOUNT STATE ---
+let currentSubtotal = 0;
+let currentDiscountVal = 0;
+let currentDiscountType = 'percent'; // 'percent' or 'fixed'
 
 document.addEventListener("DOMContentLoaded", () => {
     // Elements
@@ -163,14 +169,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const detailPanel = document.getElementById('detailPanel');
     const panelTitle = document.getElementById('panel-title');
     const panelItemsList = document.getElementById('bill-items-list');
-    const panelTotalEl = document.getElementById('panel-total');
     
+    // Totals Elements
+    const panelSubtotalEl = document.getElementById('panel-subtotal');
+    const panelDiscountRow = document.getElementById('discount-display-row');
+    const panelDiscountEl = document.getElementById('panel-discount');
+    const panelTotalEl = document.getElementById('panel-total');
+
+    // Discount Inputs
+    const discountInput = document.getElementById('discount-val');
+    const discountTypeSelect = document.getElementById('discount-type');
+
     // Manual Item
     const menuSearchInput = document.getElementById('billing-menu-search');
     const menuDropdown = document.getElementById('billing-menu-list');
     const manualQty = document.getElementById('manual-qty');
     const manualPrice = document.getElementById('manual-price');
     const manualAddBtn = document.getElementById('manual-add-btn');
+
+    // New Bill
+    const newBillModal = document.getElementById('new-bill-modal');
+    const newBillInput = document.getElementById('new-bill-identifier');
 
     // Login
     loginButton.addEventListener('click', () => {
@@ -197,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateKPIs();
                 // Refresh panel if open
                 if (currentSelectedTable) {
-                    openBillPanel(currentSelectedTable);
+                    openBillPanel(currentSelectedTable, false); // false = don't reset discount
                 } else {
                     closePanel();
                 }
@@ -209,38 +228,37 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         );
 
-        // --- SEARCH LOGIC (Manual Item) ---
+        // --- SEARCH LOGIC ---
         menuSearchInput.addEventListener('input', (e) => {
+            selectedMenuItem = null; 
+            manualPrice.value = ""; 
             const query = e.target.value.toLowerCase();
-            if(query.length === 0) {
-                menuDropdown.classList.remove('show');
-                return;
-            }
-            
+            if(query.length === 0) { menuDropdown.classList.remove('show'); return; }
             const filtered = MENU_ITEMS.filter((item, index) => {
                 const num = (index + 1).toString();
                 return item.name.toLowerCase().includes(query) || num.includes(query);
             });
-
             renderDropdown(filtered);
         });
 
-        // Hide dropdown on outside click
         document.addEventListener('click', (e) => {
-            if(!e.target.closest('.billing-search-box')) {
-                menuDropdown.classList.remove('show');
-            }
+            if(!e.target.closest('.billing-search-box')) { menuDropdown.classList.remove('show'); }
         });
 
-        // Manual Item Add Button
+        // --- DISCOUNT LISTENERS ---
+        discountInput.addEventListener('input', updateTotalsDisplay);
+        discountTypeSelect.addEventListener('change', updateTotalsDisplay);
+
+        // --- MANUAL ADD ---
         manualAddBtn.addEventListener('click', async () => {
-            if(!currentSelectedTable) return;
+            if(!currentSelectedTable) { alert("No active bill selected."); return; }
+            if (!selectedMenuItem) { alert("Please select an item from the search list."); return; }
             
-            const name = menuSearchInput.value.trim(); // Can be custom text too
+            const name = selectedMenuItem.name; 
+            const price = selectedMenuItem.price;
             const qty = parseInt(manualQty.value);
-            const price = parseFloat(manualPrice.value);
             
-            if(!name || isNaN(qty) || isNaN(price)) { alert("Please check item details."); return; }
+            if(isNaN(qty) || qty < 1) { alert("Invalid quantity."); return; }
             
             const newId = `${currentSelectedTable}-manual-${Date.now()}`;
             const existing = activeBillOrders.find(o => o.table === currentSelectedTable);
@@ -252,34 +270,34 @@ document.addEventListener("DOMContentLoaded", () => {
                 status: "billing",
                 createdAt: new Date(),
                 orderType: existing ? existing.orderType : 'dine-in',
-                customerName: existing ? existing.customerName : 'Manual',
+                customerName: existing ? existing.customerName : currentSelectedTable,
                 isManual: true
             };
             
             try {
+                manualAddBtn.disabled = true;
+                manualAddBtn.innerText = "Adding...";
                 await db.collection("orders").doc(newId).set(newItem);
-                // Reset inputs
+                
                 menuSearchInput.value = ""; 
                 manualQty.value = "1";
                 manualPrice.value = "";
+                selectedMenuItem = null;
                 menuDropdown.classList.remove('show');
-            } catch(e) { console.error(e); }
+            } catch(e) { console.error(e); alert("Failed to add item."); } 
+            finally { manualAddBtn.disabled = false; manualAddBtn.innerText = "ADD"; }
         });
     }
 
     function renderDropdown(items) {
         menuDropdown.innerHTML = "";
-        if(items.length === 0) {
-            menuDropdown.classList.remove('show');
-            return;
-        }
-
+        if(items.length === 0) { menuDropdown.classList.remove('show'); return; }
         items.forEach(item => {
             const div = document.createElement('div');
             div.className = 'billing-menu-item';
             div.innerHTML = `<span>${item.name} <strong style="color:var(--gold);">${getDishNumber(item.name)}</strong></span><span>${item.price.toFixed(2)} €</span>`;
-            
             div.addEventListener('click', () => {
+                selectedMenuItem = item;
                 menuSearchInput.value = item.name;
                 manualPrice.value = item.price.toFixed(2);
                 manualQty.value = "1";
@@ -293,10 +311,11 @@ document.addEventListener("DOMContentLoaded", () => {
     function updateKPIs() {
         const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
         activeBillsCountEl.textContent = uniqueTables.length;
-        
         let total = 0;
         activeBillOrders.forEach(o => {
-            o.items.forEach(i => total += (i.price * i.quantity));
+            if(o.items && Array.isArray(o.items)) {
+                o.items.forEach(i => total += (i.price * i.quantity));
+            }
         });
         pendingAmountEl.textContent = total.toFixed(2) + " €";
     }
@@ -304,32 +323,35 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderBillingTable() {
         billingListEl.innerHTML = "";
         const uniqueTables = [...new Set(activeBillOrders.map(o => o.table))];
-        
         if (uniqueTables.length === 0) {
             billingListEl.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:30px; color:#666;">No active bills.</td></tr>`;
             return;
         }
-
         uniqueTables.sort();
-
         uniqueTables.forEach(table => {
             const orders = activeBillOrders.filter(o => o.table === table);
             let tableTotal = 0;
             let type = "Dine-In";
             let earliestTime = new Date();
             let customerName = `Table ${table}`;
+            let isManualBill = orders.some(o => o.isManualBill === true);
 
             orders.forEach(o => {
-                o.items.forEach(i => tableTotal += (i.price * i.quantity));
+                if(o.items && Array.isArray(o.items)) {
+                    o.items.forEach(i => tableTotal += (i.price * i.quantity));
+                }
                 if(o.orderType === 'pickup') { type = "Pickup"; customerName = o.customerName; }
                 if(o.orderType === 'delivery') { type = "Delivery"; customerName = o.customerName; }
-                if(o.billRequestedAt && o.billRequestedAt.toDate() < earliestTime) earliestTime = o.billRequestedAt.toDate();
-                else if(o.createdAt && o.createdAt.toDate() < earliestTime) earliestTime = o.createdAt.toDate();
+                
+                if(o.billRequestedAt && o.billRequestedAt.toDate) {
+                     if(o.billRequestedAt.toDate() < earliestTime) earliestTime = o.billRequestedAt.toDate();
+                } else if(o.createdAt && o.createdAt.toDate) {
+                     if(o.createdAt.toDate() < earliestTime) earliestTime = o.createdAt.toDate();
+                }
             });
-
             const minsAgo = Math.floor((new Date() - earliestTime) / 60000);
-            
             let badgeClass = type === 'Pickup' ? 'badge-pickup' : (type === 'Delivery' ? 'badge-delivery' : 'badge-dinein');
+            if(isManualBill) { badgeClass = 'badge-manual'; type = "Manual"; }
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -338,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><span class="badge ${badgeClass}">${type}</span></td>
                 <td style="text-align:right; font-family:monospace; color:var(--gold); font-size:1.1rem;">${tableTotal.toFixed(2)} €</td>
                 <td style="text-align:center;">
-                    <button class="btn-action btn-print" style="padding:5px 10px; font-size:0.8rem;" onclick="openBillPanel('${table}')">Review</button>
+                    <button class="btn-action btn-print" style="padding:5px 10px; font-size:0.8rem;" onclick="openBillPanel('${table}', true)">Review</button>
                 </td>
             `;
             billingListEl.appendChild(tr);
@@ -346,7 +368,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // --- PANEL LOGIC ---
-    window.openBillPanel = function(tableId) {
+    window.openBillPanel = function(tableId, resetDiscount = false) {
         currentSelectedTable = tableId;
         const orders = activeBillOrders.filter(o => o.table === tableId);
         if(orders.length === 0) { closePanel(); return; }
@@ -356,23 +378,31 @@ document.addEventListener("DOMContentLoaded", () => {
         panelTitle.textContent = title;
 
         panelItemsList.innerHTML = "";
-        let grandTotal = 0;
+        currentSubtotal = 0;
 
         orders.forEach(order => {
-            order.items.forEach(item => {
-                const itemTotal = item.price * item.quantity;
-                grandTotal += itemTotal;
-                const div = document.createElement('div');
-                div.className = 'receipt-item';
-                div.innerHTML = `
-                    <span>${item.quantity}x ${item.name}</span>
-                    <span>${itemTotal.toFixed(2)} €</span>
-                `;
-                panelItemsList.appendChild(div);
-            });
+            if(order.items && Array.isArray(order.items)) {
+                order.items.forEach(item => {
+                    const itemTotal = item.price * item.quantity;
+                    currentSubtotal += itemTotal;
+                    const div = document.createElement('div');
+                    div.className = 'receipt-item';
+                    div.innerHTML = `
+                        <span>${item.quantity}x ${item.name}</span>
+                        <span>${itemTotal.toFixed(2)} €</span>
+                    `;
+                    panelItemsList.appendChild(div);
+                });
+            }
         });
 
-        panelTotalEl.textContent = grandTotal.toFixed(2) + " €";
+        if(resetDiscount) {
+            discountInput.value = "";
+            currentDiscountVal = 0;
+            currentDiscountType = 'percent';
+        }
+
+        updateTotalsDisplay();
         detailPanel.classList.add('open');
     }
 
@@ -381,13 +411,72 @@ document.addEventListener("DOMContentLoaded", () => {
         currentSelectedTable = null;
     }
 
+    function updateTotalsDisplay() {
+        const val = parseFloat(discountInput.value) || 0;
+        const type = discountTypeSelect.value;
+        currentDiscountVal = val;
+        currentDiscountType = type;
+
+        let discountAmt = 0;
+        if(type === 'percent') {
+            discountAmt = currentSubtotal * (val / 100);
+        } else {
+            discountAmt = val;
+        }
+
+        if(discountAmt > currentSubtotal) discountAmt = currentSubtotal; // Prevent negative
+
+        const finalTotal = currentSubtotal - discountAmt;
+
+        panelSubtotalEl.textContent = currentSubtotal.toFixed(2) + " €";
+        panelTotalEl.textContent = finalTotal.toFixed(2) + " €";
+        
+        if(discountAmt > 0) {
+            panelDiscountRow.style.display = 'flex';
+            panelDiscountEl.textContent = "- " + discountAmt.toFixed(2) + " €";
+        } else {
+            panelDiscountRow.style.display = 'none';
+        }
+    }
+
+    // --- NEW BILL LOGIC ---
+    window.showNewBillModal = function() {
+        if(newBillModal) {
+            newBillInput.value = "";
+            newBillModal.classList.remove('hidden');
+            newBillInput.focus();
+        }
+    }
+
+    window.createNewBill = async function() {
+        const identifier = newBillInput.value.trim();
+        if(!identifier) { alert("Please enter a Table Number or Name"); return; }
+        if(activeBillOrders.some(o => o.table === identifier)) { alert("Bill already exists!"); return; }
+
+        const newId = `${identifier}-init-${Date.now()}`;
+        const newBillDoc = {
+            id: newId,
+            table: identifier,
+            items: [], 
+            status: "billing",
+            createdAt: new Date(),
+            billRequestedAt: new Date(),
+            orderType: 'dine-in',
+            customerName: identifier,
+            isManualBill: true
+        };
+        try {
+            await db.collection("orders").doc(newId).set(newBillDoc);
+            newBillModal.classList.add('hidden');
+            currentSelectedTable = identifier; 
+        } catch(e) { console.error(e); alert("Error creating bill"); }
+    }
+
     // --- ACTIONS ---
     window.handlePrintAndClose = async function() {
         if(!currentSelectedTable) return;
         generateReceiptHTML(currentSelectedTable);
-        window.print(); // Browser Print Dialog
-        
-        // Confirm before archiving
+        window.print(); 
         setTimeout(async () => {
             if(confirm("Confirm: Receipt printed & Payment received?")) {
                 await archiveCurrentBill(true);
@@ -415,7 +504,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const batch = db.batch();
             orders.forEach(o => {
                 const ref = db.collection("orders").doc(o.id);
-                batch.update(ref, { status: "cooked" }); // Send back to cooked
+                if(o.isManualBill && (!o.items || o.items.length === 0)) { batch.delete(ref); } 
+                else { batch.update(ref, { status: "cooked" }); }
             });
             await batch.commit();
             closePanel();
@@ -424,60 +514,92 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function archiveCurrentBill(markPaid) {
         const orders = activeBillOrders.filter(o => o.table === currentSelectedTable);
-        const total = parseFloat(panelTotalEl.textContent);
+        // Recalculate finals
+        let discountAmt = 0;
+        if(currentDiscountType === 'percent') discountAmt = currentSubtotal * (currentDiscountVal / 100);
+        else discountAmt = currentDiscountVal;
+        if(discountAmt > currentSubtotal) discountAmt = currentSubtotal;
+        const finalTotal = currentSubtotal - discountAmt;
+
         const archiveId = `archive-${Date.now()}`;
-        
         let allItems = [];
-        orders.forEach(o => allItems.push(...o.items));
+        let type = 'dine-in';
+        let custName = currentSelectedTable;
+
+        orders.forEach(o => {
+            if(o.items) allItems.push(...o.items);
+            if(o.orderType) type = o.orderType;
+            if(o.customerName) custName = o.customerName;
+        });
 
         const archiveDoc = {
             table: currentSelectedTable,
             items: allItems,
-            total: total,
-            paidAmount: total,
+            subtotal: currentSubtotal,
+            discountValue: currentDiscountVal,
+            discountType: currentDiscountType,
+            discountAmount: discountAmt,
+            total: finalTotal,
+            paidAmount: finalTotal,
             closedAt: new Date(),
-            orderType: orders[0].orderType,
-            customerName: orders[0].customerName || null
+            orderType: type,
+            customerName: custName
         };
 
         try {
             const batch = db.batch();
-            
-            // 1. Create Archive Record
             const archiveRef = db.collection("archived_orders").doc(archiveId);
             batch.set(archiveRef, archiveDoc);
-
-            // 2. Delete Active Orders
             orders.forEach(o => {
                 const ref = db.collection("orders").doc(o.id);
                 batch.delete(ref);
             });
-
             await batch.commit();
             closePanel();
-        } catch(e) {
-            console.error("Archive Error", e);
-            alert("Error closing bill");
-        }
+        } catch(e) { console.error("Archive Error", e); alert("Error closing bill"); }
     }
 
     function generateReceiptHTML(tableId) {
         const orders = activeBillOrders.filter(o => o.table === tableId);
         const container = document.getElementById('receipt-print-area');
-        const total = document.getElementById('panel-total').textContent;
         const dateStr = new Date().toLocaleString('de-DE');
 
         let itemsHtml = "";
         orders.forEach(o => {
-            o.items.forEach(i => {
-                itemsHtml += `
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-family:monospace;">
-                        <span>${i.quantity} x ${i.name}</span>
-                        <span>${(i.price * i.quantity).toFixed(2)}</span>
-                    </div>
-                `;
-            });
+            if(o.items && Array.isArray(o.items)) {
+                o.items.forEach(i => {
+                    itemsHtml += `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-family:monospace;">
+                            <span>${i.quantity} x ${i.name}</span>
+                            <span>${(i.price * i.quantity).toFixed(2)}</span>
+                        </div>
+                    `;
+                });
+            }
         });
+
+        // Recalc for print
+        let discountAmt = 0;
+        if(currentDiscountType === 'percent') discountAmt = currentSubtotal * (currentDiscountVal / 100);
+        else discountAmt = currentDiscountVal;
+        if(discountAmt > currentSubtotal) discountAmt = currentSubtotal;
+        const finalTotal = currentSubtotal - discountAmt;
+
+        let discountHtml = "";
+        if(discountAmt > 0) {
+            discountHtml = `
+            <div style="display:flex; justify-content:space-between; font-family:monospace; margin-top:10px;">
+                <span>Subtotal</span>
+                <span>${currentSubtotal.toFixed(2)}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-family:monospace; color:black;">
+                <span>Discount (${currentDiscountType === 'percent' ? currentDiscountVal + '%' : 'Fixed'})</span>
+                <span>- ${discountAmt.toFixed(2)}</span>
+            </div>
+            <hr style="border-top:1px dashed #000;">`;
+        } else {
+             discountHtml = `<hr style="border-top:1px dashed #000;">`;
+        }
 
         container.innerHTML = `
             <div style="text-align:center; font-family:monospace; width:300px; margin:0 auto;">
@@ -490,10 +612,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div style="text-align:left;">
                     ${itemsHtml}
                 </div>
-                <hr style="border-top:1px dashed #000;">
+                ${discountHtml}
                 <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.2em;">
                     <span>TOTAL</span>
-                    <span>${total}</span>
+                    <span>${finalTotal.toFixed(2)} €</span>
                 </div>
                 <hr style="border-top:1px dashed #000;">
                 <p style="margin-top:20px;">Thank you for your visit!</p>
