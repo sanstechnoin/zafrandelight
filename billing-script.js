@@ -487,18 +487,22 @@ document.addEventListener("DOMContentLoaded", () => {
     window.handlePrintAndClose = async function() {
         if(!currentSelectedTable) return;
         generateReceiptHTML(currentSelectedTable);
-        window.print(); 
-        setTimeout(async () => {
-            if(confirm("Confirm: Receipt printed & Payment received?")) {
-                await archiveCurrentBill(true);
-            }
-        }, 1000);
+        
+        // Small delay to ensure content is rendered in DOM
+        setTimeout(() => {
+            window.print(); 
+            setTimeout(async () => {
+                if(confirm("Confirm: Receipt printed & Payment received?")) {
+                    await archiveCurrentBill(true);
+                }
+            }, 500);
+        }, 300);
     }
 
     window.handleReprint = function() {
         if(!currentSelectedTable) return;
         generateReceiptHTML(currentSelectedTable);
-        window.print();
+        setTimeout(() => { window.print(); }, 300);
     }
 
     window.handlePaidAndClose = async function() {
@@ -580,7 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if(o.items && Array.isArray(o.items)) {
                 o.items.forEach(i => {
                     itemsHtml += `
-                        <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-family:monospace;">
+                        <div class="print-row">
                             <span>${i.quantity} x ${i.name}</span>
                             <span>${(i.price * i.quantity).toFixed(2)}</span>
                         </div>
@@ -594,41 +598,65 @@ document.addEventListener("DOMContentLoaded", () => {
         else discountAmt = currentDiscountVal;
         if(discountAmt > currentSubtotal) discountAmt = currentSubtotal;
         const finalTotal = currentSubtotal - discountAmt;
+        const netTotal = finalTotal / 1.07; // Approx Net for 7% VAT
+        const taxTotal = finalTotal - netTotal;
 
         let discountHtml = "";
         if(discountAmt > 0) {
             discountHtml = `
-            <div style="display:flex; justify-content:space-between; font-family:monospace; margin-top:10px;">
-                <span>Subtotal</span>
+            <div class="print-row">
+                <span>Zwischensumme</span>
                 <span>${currentSubtotal.toFixed(2)}</span>
             </div>
-            <div style="display:flex; justify-content:space-between; font-family:monospace; color:black;">
-                <span>Discount (${currentDiscountType === 'percent' ? currentDiscountVal + '%' : 'Fixed'})</span>
+            <div class="print-row">
+                <span>Rabatt (${currentDiscountType === 'percent' ? currentDiscountVal + '%' : 'Fix'})</span>
                 <span>- ${discountAmt.toFixed(2)}</span>
             </div>
-            <hr style="border-top:1px dashed #000;">`;
+            <div class="print-divider"></div>`;
         } else {
-             discountHtml = `<hr style="border-top:1px dashed #000;">`;
+             discountHtml = `<div class="print-divider"></div>`;
         }
 
         container.innerHTML = `
-            <div style="text-align:center; font-family:monospace; width:300px; margin:0 auto;">
-                <h2 style="margin:0;">Zaffran Delight</h2>
-                <p style="margin:5px 0;">Oststr. 3, 53879 Euskirchen</p>
-                <p style="margin:5px 0;">Tel: 02251 / 123456</p>
-                <hr style="border-top:1px dashed #000;">
-                <p style="text-align:left;">Table: ${tableId}<br>Date: ${dateStr}</p>
-                <hr style="border-top:1px dashed #000;">
-                <div style="text-align:left;">
-                    ${itemsHtml}
+            <div id="receipt-container">
+                <div class="print-header">
+                    <img src="logo.png" class="print-logo" alt="Zaffran"><br>
+                    <span class="print-bold">Zaffran Delight</span><br>
+                    Kessenicher Str. 9, 53879 Euskirchen<br>
+                    Tel: 02251 1290950<br>
+                    Steuer-Nr: 123/456/7890
                 </div>
+                <div class="print-divider"></div>
+                <div class="print-row">
+                    <span>Tisch: ${tableId}</span>
+                    <span>${dateStr}</span>
+                </div>
+                <div class="print-divider"></div>
+                
+                ${itemsHtml}
+                
                 ${discountHtml}
-                <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:1.2em;">
-                    <span>TOTAL</span>
-                    <span>${finalTotal.toFixed(2)} €</span>
+                
+                <div class="print-row print-bold" style="font-size:14px; margin-top:5px;">
+                    <span>GESAMT (EUR)</span>
+                    <span>${finalTotal.toFixed(2)}</span>
                 </div>
-                <hr style="border-top:1px dashed #000;">
-                <p style="margin-top:20px;">Thank you for your visit!</p>
+                
+                <div class="print-divider"></div>
+                
+                <div class="print-row" style="font-size:10px;">
+                    <span>Netto</span>
+                    <span>${netTotal.toFixed(2)}</span>
+                </div>
+                <div class="print-row" style="font-size:10px;">
+                    <span>MwSt (7% inkl.)</span>
+                    <span>${taxTotal.toFixed(2)}</span>
+                </div>
+
+                <div class="print-footer">
+                    Vielen Dank für Ihren Besuch!<br>
+                    Es gilt deutsches Recht.
+                </div>
             </div>
         `;
     }
